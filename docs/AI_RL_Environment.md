@@ -1,3 +1,5 @@
+> **Status: exploratory, deferred.** The MVP uses heuristic bots behind the `Bot` interface in `src/bots/types.ts`, which receives only a `PlayerView` plus the legal moves, so a learned policy can plug in later. The reward values and rules below are unvalidated proposals; see [plan.md](./plan.md).
+
 Project: VC Card Game & RL AI  
 Purpose: Define the mathematical boundaries, state representations, and reward functions for the Stable-Baselines3 PPO training environment.
 

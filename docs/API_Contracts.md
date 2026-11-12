@@ -1,3 +1,5 @@
+> **Status: not used by the MVP.** The game runs entirely in the browser, so there is no client/server boundary yet. Revisit this document only if a backend is added (for example for login or saved stats). Its rules assumptions are out of date; see [VC_Game_Rules.md](./VC_Game_Rules.md).
+
 Project: VC Card Game & RL AI  
 Purpose: Define the strict REST API endpoints and JSON payloads for communication between the frontend UI and the FastAPI local server.
 

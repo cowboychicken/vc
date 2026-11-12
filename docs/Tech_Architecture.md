@@ -1,3 +1,5 @@
+> **Status: superseded.** The MVP is a browser-only TypeScript app with no backend (see [plan.md](./plan.md)). The notes below are the original exploratory proposal and are kept for reference.
+
 Project: VC Card Game & RL AI  
 Primary Goal: Local-first, offline-capable architecture for development, self-play training, and inference.
 
