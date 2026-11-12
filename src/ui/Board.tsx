@@ -45,7 +45,7 @@ export function Opponent({ seat, view }: { seat: number; view: PlayerView }) {
   );
 }
 
-export function Felt({ view }: { view: PlayerView }) {
+export function Felt({ view, showLog }: { view: PlayerView; showLog: boolean }) {
   const { table, history } = view;
   const recent = history.slice(-3).reverse();
   return (
@@ -64,13 +64,15 @@ export function Felt({ view }: { view: PlayerView }) {
       ) : (
         <div className="played-label empty">Table clear</div>
       )}
-      <ul className="ticker" aria-label="Recent moves">
-        {recent.map((e, i) => (
-          <li key={history.length - i} style={{ opacity: 1 - i * 0.3 }}>
-            {describeEntry(e)}
-          </li>
-        ))}
-      </ul>
+      {showLog && (
+        <ul className="ticker" aria-label="Recent moves">
+          {recent.map((e, i) => (
+            <li key={history.length - i} style={{ opacity: 1 - i * 0.3 }}>
+              {describeEntry(e)}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

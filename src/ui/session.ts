@@ -1,4 +1,4 @@
-import { heuristicBot, botMove } from "../bots";
+import { type Bot, botMove, heuristicBot } from "../bots";
 import { type GameState, type Move, type NewGameOptions, applyMove, makeRng, newGame } from "../engine";
 
 export const HUMAN = 0;
@@ -14,8 +14,9 @@ export interface Session {
 
 export type SessionAction =
   | { type: "human"; move: Move }
-  | { type: "bot" }
+  | { type: "bot"; bot?: Bot }
   | { type: "rematch"; seed: number }
+  | { type: "restart"; seed: number }
   | { type: "sameDeal" };
 
 function begin(prev: Pick<Session, "played" | "won">, start: NewGameOptions): Session {
@@ -28,7 +29,7 @@ function tally({ played, won }: Pick<Session, "played" | "won">, game: GameState
   return { played: played + 1, won: won + (game.winner === HUMAN ? 1 : 0) };
 }
 
-export const initSession = (seed: number): Session => begin({ played: 0, won: 0 }, { seed });
+export const initSession = (start: NewGameOptions): Session => begin({ played: 0, won: 0 }, start);
 
 function advance(session: Session, move: Move): Session {
   const game = applyMove(session.game, move);
@@ -48,11 +49,13 @@ export function reduceSession(session: Session, action: SessionAction): Session 
     case "bot": {
       if (game.winner !== null || game.turn === HUMAN) return session;
       const rng = makeRng(game.seed * 31 + game.history.length);
-      return advance(session, botMove(game, heuristicBot, rng));
+      return advance(session, botMove(game, action.bot ?? heuristicBot, rng));
     }
     case "rematch":
       if (game.winner === null) return session;
       return begin(session, { seed: action.seed, leader: game.winner });
+    case "restart":
+      return begin(session, { seed: action.seed });
     case "sameDeal":
       return begin(session, session.start);
   }

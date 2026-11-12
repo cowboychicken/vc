@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import { heuristicBot } from "../bots";
 import {
   type Card,
+  type NewGameOptions,
+  NUM_PLAYERS,
   canPass,
   describeCombo,
   explainIllegalPlay,
@@ -15,30 +17,51 @@ import {
 } from "../engine";
 import { CardFace } from "./CardFace";
 import { Felt, GameOver, Opponent, possessive } from "./Board";
+import { MenuDialog } from "./Menu";
 import { HUMAN, SEAT_NAMES, initSession, reduceSession } from "./session";
+import { BOT_BY_LEVEL, BOT_DELAY_MS, type Settings, loadSettings, saveSettings } from "./settings";
 
-const BOT_DELAY_MS = 800;
 const randomSeed = () => Math.floor(Math.random() * 2 ** 32);
 
-function startingSeed(): number {
-  const param = new URLSearchParams(window.location.search).get("seed");
-  const parsed = param === null ? NaN : Number.parseInt(param, 10);
-  return Number.isFinite(parsed) ? parsed >>> 0 : randomSeed();
+function parseUint(text: string | null): number | null {
+  if (text === null || !/^\d+$/.test(text)) return null;
+  const n = Number(text);
+  return Number.isSafeInteger(n) ? n >>> 0 : null;
+}
+
+/** `?seed=N` replays a deal; `&leader=0..3` restores who led it. */
+function startingOptions(): NewGameOptions {
+  const params = new URLSearchParams(window.location.search);
+  const seed = parseUint(params.get("seed"));
+  if (seed === null) return { seed: randomSeed() };
+  const leader = parseUint(params.get("leader"));
+  return leader !== null && leader < NUM_PLAYERS ? { seed, leader } : { seed };
 }
 
 export default function App() {
-  const [session, dispatch] = useReducer(reduceSession, undefined, () => initSession(startingSeed()));
+  const [session, dispatch] = useReducer(reduceSession, undefined, () => initSession(startingOptions()));
   const [selected, setSelected] = useState<Card[]>([]);
   const [hint, setHint] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [settings, setSettings] = useState<Settings>(loadSettings);
   const { game } = session;
   const view = useMemo(() => viewFor(game, HUMAN), [game]);
   const myTurn = view.turn === HUMAN && view.winner === null;
 
+  const updateSettings = (next: Settings) => {
+    setSettings(next);
+    saveSettings(next);
+  };
+
+  // Bots wait while the menu is open.
   useEffect(() => {
-    if (game.winner !== null || game.turn === HUMAN) return;
-    const id = window.setTimeout(() => dispatch({ type: "bot" }), BOT_DELAY_MS);
+    if (menuOpen || game.winner !== null || game.turn === HUMAN) return;
+    const id = window.setTimeout(
+      () => dispatch({ type: "bot", bot: BOT_BY_LEVEL[settings.botLevel] }),
+      BOT_DELAY_MS[settings.botSpeed],
+    );
     return () => window.clearTimeout(id);
-  }, [game]);
+  }, [game, menuOpen, settings.botLevel, settings.botSpeed]);
 
   const toggle = useCallback(
     (card: Card) => {
@@ -107,8 +130,14 @@ export default function App() {
           <span data-testid="record">
             Won {session.won} of {session.played}
           </span>
-          <button type="button" className="link" onClick={() => resetFor({ type: "rematch", seed: randomSeed() })} hidden={view.winner === null}>
-            New deal
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Menu, rules and settings"
+            aria-haspopup="dialog"
+            onClick={() => setMenuOpen(true)}
+          >
+            i
           </button>
         </div>
       </header>
@@ -116,7 +145,7 @@ export default function App() {
       <main className="board">
         <Opponent seat={2} view={view} />
         <Opponent seat={1} view={view} />
-        <Felt view={view} />
+        <Felt view={view} showLog={settings.moveLog} />
         <Opponent seat={3} view={view} />
       </main>
 
@@ -133,9 +162,11 @@ export default function App() {
           <button type="button" onClick={doPass} disabled={!canPass(view)}>
             Pass
           </button>
-          <button type="button" onClick={doHint} disabled={!myTurn}>
-            Hint
-          </button>
+          {settings.hints && (
+            <button type="button" onClick={doHint} disabled={!myTurn}>
+              Hint
+            </button>
+          )}
           <button type="button" onClick={() => setSelected([])} disabled={selected.length === 0}>
             Clear
           </button>
@@ -150,6 +181,26 @@ export default function App() {
           view={view}
           onRematch={() => resetFor({ type: "rematch", seed: randomSeed() })}
           onSameDeal={() => resetFor({ type: "sameDeal" })}
+        />
+      )}
+
+      {menuOpen && (
+        <MenuDialog
+          game={game}
+          start={session.start}
+          settings={settings}
+          onSettings={updateSettings}
+          onNewDeal={() => {
+            resetFor(
+              game.winner !== null ? { type: "rematch", seed: randomSeed() } : { type: "restart", seed: randomSeed() },
+            );
+            setMenuOpen(false);
+          }}
+          onSameDeal={() => {
+            resetFor({ type: "sameDeal" });
+            setMenuOpen(false);
+          }}
+          onClose={() => setMenuOpen(false)}
         />
       )}
     </div>
