@@ -1,13 +1,4 @@
-import {
-  type Card,
-  cardLabel,
-  isRed,
-  rankOf,
-  RANK_LABELS,
-  suitOf,
-  SUIT_NAMES,
-  SUIT_SYMBOLS,
-} from "../engine";
+import { type Card, RANK_LABELS, SUIT_NAMES, SUIT_SYMBOLS, cardLabel, rankOf, suitOf } from "../engine";
 
 interface Props {
   card: Card;
@@ -18,17 +9,12 @@ interface Props {
 
 export function CardFace({ card, selected = false, onToggle, small = false }: Props) {
   const label = `${RANK_LABELS[rankOf(card)]} of ${SUIT_NAMES[suitOf(card)]}`;
-  const cls = `card${isRed(card) ? " red" : ""}${selected ? " selected" : ""}${small ? " small" : ""}`;
+  const cls = `card${selected ? " selected" : ""}${small ? " small" : ""}`;
   const body = (
-    <>
-      <span className="corner">
-        <span>{RANK_LABELS[rankOf(card)]}</span>
-        <span>{SUIT_SYMBOLS[suitOf(card)]}</span>
-      </span>
-      <span className="pip" aria-hidden="true">
-        {SUIT_SYMBOLS[suitOf(card)]}
-      </span>
-    </>
+    <span className="corner">
+      <span>{RANK_LABELS[rankOf(card)]}</span>
+      <span>{SUIT_SYMBOLS[suitOf(card)]}</span>
+    </span>
   );
   if (!onToggle) {
     return (
@@ -42,8 +28,4 @@ export function CardFace({ card, selected = false, onToggle, small = false }: Pr
       {body}
     </button>
   );
-}
-
-export function CardBack() {
-  return <span className="card back" aria-hidden="true" />;
 }

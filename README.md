@@ -1,4 +1,4 @@
-# Tiến Lên
+# VC_13
 
 A light browser game: quick Tiến Lên (Miền Nam rules) against three bots. No sign-up, no server.
 

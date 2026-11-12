@@ -102,7 +102,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <h1>Tiến Lên</h1>
+        <h1>VC_13</h1>
         <div className="meta">
           <span data-testid="record">
             Won {session.won} of {session.played}

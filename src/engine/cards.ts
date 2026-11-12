@@ -14,7 +14,6 @@ export const THREE_OF_SPADES: Card = 0;
 export const rankOf = (c: Card): number => c >> 2;
 export const suitOf = (c: Card): number => c & 3;
 export const isTwo = (c: Card): boolean => rankOf(c) === TWO_RANK;
-export const isRed = (c: Card): boolean => suitOf(c) >= 2;
 
 export const cardLabel = (c: Card): string => `${RANK_LABELS[rankOf(c)]}${SUIT_SYMBOLS[suitOf(c)]}`;
 export const cardsLabel = (cs: readonly Card[]): string => cs.map(cardLabel).join(" ");

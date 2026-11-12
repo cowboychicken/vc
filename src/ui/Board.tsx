@@ -5,7 +5,7 @@ import {
   cardsLabel,
   describeCombo,
 } from "../engine";
-import { CardBack, CardFace } from "./CardFace";
+import { CardFace } from "./CardFace";
 import { HUMAN, SEAT_NAMES } from "./session";
 
 const POSITIONS = ["bottom", "left", "top", "right"] as const;
@@ -25,9 +25,8 @@ export function Opponent({ seat, view }: { seat: number; view: PlayerView }) {
   return (
     <div className={cls} data-testid={`opponent-${seat}`}>
       <div className="opp-name">{SEAT_NAMES[seat]}</div>
-      <div className="opp-stack" role="img" aria-label={`${count} cards left`}>
-        <CardBack />
-        <span className="opp-count">{count}</span>
+      <div className="opp-count" role="img" aria-label={`${count} cards left`}>
+        {count}
       </div>
       <div className="opp-status" aria-live="polite">
         {view.winner === seat
@@ -87,7 +86,7 @@ export function GameOver({ view, onRematch, onSameDeal }: GameOverProps) {
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-labelledby="over-title">
       <div className="dialog">
-        <h2 id="over-title">{won ? "You win! 🎉" : `${SEAT_NAMES[view.winner!]} wins`}</h2>
+        <h2 id="over-title">{won ? "You win" : `${SEAT_NAMES[view.winner!]} wins`}</h2>
         {view.instantWin && (
           <p className="instant">
             Instant win — {INSTANT_WIN_LABELS[view.instantWin]} dealt to {view.winner === HUMAN ? "you" : SEAT_NAMES[view.winner!]}.
