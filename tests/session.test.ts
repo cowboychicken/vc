@@ -81,6 +81,19 @@ describe("session reducer", () => {
     expect(s.played).toBe(s.game.winner === null ? 0 : 1);
   });
 
+  it("applies a rule change to the current game and to every later deal and replay", () => {
+    const on = { bombsBeatAnything: true };
+    let s = reduceSession(initSession({ seed: 5 }), { type: "rules", rules: on });
+    expect(s.game.rules).toEqual(on);
+    expect(reduceSession(s, { type: "rules", rules: on })).toBe(s);
+    expect(reduceSession(s, { type: "sameDeal" }).game.rules).toEqual(on);
+    expect(reduceSession(s, { type: "restart", seed: 8 }).game.rules).toEqual(on);
+    s = playToEnd(s);
+    expect(reduceSession(s, { type: "rematch", seed: 9 }).game.rules).toEqual(on);
+    const off = { bombsBeatAnything: false };
+    expect(reduceSession(s, { type: "rules", rules: off }).game.rules).toEqual(off);
+  });
+
   it("restores a shared deal including who led it", () => {
     const s = initSession({ seed: 5, leader: 2 });
     expect(s.game.turn).toBe(2);
@@ -96,7 +109,7 @@ describe("settings", () => {
   });
 
   it("keeps valid stored values", () => {
-    const stored = { botSpeed: "fast", botLevel: "easy", hints: false, moveLog: false };
+    const stored = { botSpeed: "fast", botLevel: "easy", hints: false, moveLog: false, bombsBeatAnything: true };
     expect(parseSettings(JSON.stringify(stored))).toEqual(stored);
   });
 });

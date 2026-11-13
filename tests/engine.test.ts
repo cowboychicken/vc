@@ -108,6 +108,44 @@ describe("beats", () => {
   });
 });
 
+describe("bombsBeatAnything house rule", () => {
+  const on = { bombsBeatAnything: true };
+  const threePairs = combo("3♠ 3♥ 4♣ 4♦ 5♥ 5♠");
+  const quad = combo("7♠ 7♣ 7♦ 7♥");
+  const highRun = combo("6♠ 6♥ 7♣ 7♦ 8♥ 8♠");
+
+  it("lets a bomb beat plays it normally can't, including 2s of any size", () => {
+    for (const target of ["A♥", "K♠ K♥", "9♠ 9♣ 9♦", "5♠ 6♠ 7♠", "2♥", "2♠ 2♥", "2♠ 2♣ 2♥"]) {
+      expect(beats(combo(target), threePairs, on), target).toBe(true);
+      expect(beats(combo(target), quad, on), target).toBe(true);
+    }
+    expect(beats(combo("A♥"), threePairs)).toBe(false);
+    expect(beats(combo("2♠ 2♥"), threePairs)).toBe(false);
+  });
+
+  it("makes a bomb on a bomb a matter of the higher ending card, across kinds", () => {
+    expect(beats(quad, highRun, on)).toBe(true); // the run tops out at 8♥, above the quad's 7♥
+    expect(beats(highRun, quad, on)).toBe(false);
+    expect(beats(highRun, quad)).toBe(true); // standard: four of a kind outranks a 3-pair run
+    expect(beats(quad, highRun)).toBe(false);
+    expect(beats(quad, threePairs, on)).toBe(false); // ends in 5♥, below 7♥
+  });
+
+  it("still compares same-kind bombs by top card and never lets plain plays beat a bomb", () => {
+    expect(beats(combo("7♠ 7♣ 7♦ 7♥"), combo("8♠ 8♣ 8♦ 8♥"), on)).toBe(true);
+    expect(beats(combo("8♠ 8♣ 8♦ 8♥"), combo("7♠ 7♣ 7♦ 7♥"), on)).toBe(false);
+    expect(beats(quad, combo("2♥"), on)).toBe(false);
+    expect(beats(quad, combo("A♥"), on)).toBe(false);
+  });
+
+  it("offers bombs as legal plays on any table only when the rule is on", () => {
+    const hand = cs("3♠ 3♥ 4♣ 4♦ 5♥ 5♠ 9♠");
+    const table = combo("7♠ 7♥");
+    expect(legalPlays(hand, table, false).map((p) => p.kind)).toEqual([]);
+    expect(legalPlays(hand, table, false, on).map((p) => p.kind)).toEqual(["pairRun"]);
+  });
+});
+
 describe("instantWin", () => {
   it("detects four 2s", () => {
     expect(instantWin(cs("2♠ 2♣ 2♦ 2♥ 3♠ 5♠ 7♠ 9♠ J♠ K♠ 4♣ 6♣ 8♣"))).toBe("fourTwos");

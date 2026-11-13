@@ -1,5 +1,5 @@
 import { type Card, rankOf, sortCards, TWO_RANK } from "./cards";
-import { bombPower, canChop } from "./rules";
+import { DEFAULT_RULES, type RuleOptions, bombPower, canChop } from "./rules";
 
 export type ComboKind = "single" | "pair" | "triple" | "quad" | "run" | "pairRun";
 
@@ -60,9 +60,9 @@ export function classify(input: readonly Card[]): Combo | null {
 export const isBomb = (c: Combo): boolean => bombPower(c) > 0;
 
 /** True if `next` may be played on top of `prev`. */
-export function beats(prev: Combo, next: Combo): boolean {
+export function beats(prev: Combo, next: Combo, rules: RuleOptions = DEFAULT_RULES): boolean {
   if (prev.kind === next.kind && prev.cards.length === next.cards.length) {
     return next.top > prev.top;
   }
-  return canChop(prev, next);
+  return canChop(prev, next, rules);
 }

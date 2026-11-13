@@ -1,8 +1,16 @@
 import { type Bot, botMove, heuristicBot } from "../bots";
-import { type GameState, type Move, type NewGameOptions, applyMove, makeRng, newGame } from "../engine";
+import {
+  type GameState,
+  type Move,
+  type NewGameOptions,
+  type RuleOptions,
+  applyMove,
+  makeRng,
+  newGame,
+} from "../engine";
 
 export const HUMAN = 0;
-export const SEAT_NAMES = ["You", "Bot 1", "Bot 2", "Bot 3"] as const;
+export const SEAT_NAMES = ["You", "Bot One", "Bot Two", "Bot Three"] as const;
 
 export interface Session {
   game: GameState;
@@ -17,7 +25,8 @@ export type SessionAction =
   | { type: "bot"; bot?: Bot }
   | { type: "rematch"; seed: number }
   | { type: "restart"; seed: number }
-  | { type: "sameDeal" };
+  | { type: "sameDeal" }
+  | { type: "rules"; rules: RuleOptions };
 
 function begin(prev: Pick<Session, "played" | "won">, start: NewGameOptions): Session {
   const game = newGame(start);
@@ -53,10 +62,14 @@ export function reduceSession(session: Session, action: SessionAction): Session 
     }
     case "rematch":
       if (game.winner === null) return session;
-      return begin(session, { seed: action.seed, leader: game.winner });
+      return begin(session, { seed: action.seed, leader: game.winner, rules: game.rules });
     case "restart":
-      return begin(session, { seed: action.seed });
+      return begin(session, { seed: action.seed, rules: game.rules });
     case "sameDeal":
       return begin(session, session.start);
+    case "rules":
+      // House rules apply immediately, and carry into later deals and replays.
+      if (JSON.stringify(game.rules) === JSON.stringify(action.rules)) return session;
+      return { ...session, game: { ...game, rules: action.rules }, start: { ...session.start, rules: action.rules } };
   }
 }

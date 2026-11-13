@@ -19,7 +19,7 @@ import { CardFace } from "./CardFace";
 import { Felt, GameOver, Opponent, possessive } from "./Board";
 import { MenuDialog } from "./Menu";
 import { HUMAN, SEAT_NAMES, initSession, reduceSession } from "./session";
-import { BOT_BY_LEVEL, BOT_DELAY_MS, type Settings, loadSettings, saveSettings } from "./settings";
+import { BOT_BY_LEVEL, BOT_DELAY_MS, type Settings, loadSettings, rulesFromSettings, saveSettings } from "./settings";
 
 const randomSeed = () => Math.floor(Math.random() * 2 ** 32);
 
@@ -39,11 +39,13 @@ function startingOptions(): NewGameOptions {
 }
 
 export default function App() {
-  const [session, dispatch] = useReducer(reduceSession, undefined, () => initSession(startingOptions()));
+  const [settings, setSettings] = useState<Settings>(loadSettings);
+  const [session, dispatch] = useReducer(reduceSession, undefined, () =>
+    initSession({ ...startingOptions(), rules: rulesFromSettings(settings) }),
+  );
   const [selected, setSelected] = useState<Card[]>([]);
   const [hint, setHint] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [settings, setSettings] = useState<Settings>(loadSettings);
   const { game } = session;
   const view = useMemo(() => viewFor(game, HUMAN), [game]);
   const myTurn = view.turn === HUMAN && view.winner === null;
@@ -51,6 +53,7 @@ export default function App() {
   const updateSettings = (next: Settings) => {
     setSettings(next);
     saveSettings(next);
+    dispatch({ type: "rules", rules: rulesFromSettings(next) });
   };
 
   // Bots wait while the menu is open.

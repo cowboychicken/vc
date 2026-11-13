@@ -10,7 +10,14 @@ import {
 } from "./cards";
 import { type Combo, beats, classify, describeCombo, isBomb } from "./combos";
 import { legalPlays } from "./legal";
-import { type InstantWin, containsOpeningCard, instantWin } from "./rules";
+import {
+  DEFAULT_RULES,
+  type InstantWin,
+  type RuleOptions,
+  containsOpeningCard,
+  describeBombNeededForTwos,
+  instantWin,
+} from "./rules";
 
 export type Move = { type: "play"; cards: Card[] } | { type: "pass" };
 
@@ -29,6 +36,7 @@ export interface GameState {
   seed: number;
   /** Seat that started the game. */
   leader: number;
+  rules: RuleOptions;
   hands: Card[][];
   turn: number;
   table: TablePlay | null;
@@ -43,6 +51,7 @@ export interface GameState {
 /** What one seat is allowed to know. Other hands are only included once the game is over. */
 export interface PlayerView {
   seat: number;
+  rules: RuleOptions;
   hand: Card[];
   handSizes: number[];
   turn: number;
@@ -59,15 +68,17 @@ export interface NewGameOptions {
   seed: number;
   /** Seat that leads freely. Omit for a first game: the 3♠ holder leads and must play it. */
   leader?: number;
+  rules?: RuleOptions;
 }
 
-export function newGame({ seed, leader }: NewGameOptions): GameState {
+export function newGame({ seed, leader, rules = DEFAULT_RULES }: NewGameOptions): GameState {
   const hands = deal(seed);
   const first = leader === undefined;
   const start = first ? hands.findIndex((h) => h.includes(THREE_OF_SPADES)) : leader;
   const state: GameState = {
     seed,
     leader: start,
+    rules,
     hands,
     turn: start,
     table: null,
@@ -89,6 +100,7 @@ export function viewFor(state: GameState, seat: number): PlayerView {
   const over = state.winner !== null;
   return {
     seat,
+    rules: state.rules,
     hand: [...state.hands[seat]!],
     handSizes: state.hands.map((h) => h.length),
     turn: state.turn,
@@ -105,11 +117,30 @@ export function viewFor(state: GameState, seat: number): PlayerView {
 /** Legal plays for the seat the view belongs to (empty unless it is that seat's turn). */
 export function legalPlaysForView(view: PlayerView): Combo[] {
   if (view.winner !== null || view.turn !== view.seat) return [];
-  return legalPlays(view.hand, view.table?.combo ?? null, view.openingRequired);
+  return legalPlays(view.hand, view.table?.combo ?? null, view.openingRequired, view.rules);
 }
 
 export function canPass(view: Pick<PlayerView, "winner" | "turn" | "seat" | "table">): boolean {
   return view.winner === null && view.turn === view.seat && view.table !== null;
+}
+
+const TWOS_NAMES: Record<number, string> = { 1: "A single 2", 2: "A pair of 2s", 3: "A triple of 2s" };
+
+function explainFailedBeat(table: Combo, play: Combo, rules: RuleOptions): string {
+  if (isBomb(table)) {
+    return rules.bombsBeatAnything
+      ? "Beat that bomb with a bomb ending in a higher card."
+      : "Beat that bomb with a stronger bomb.";
+  }
+  const twos = rankOf(table.top) === TWO_RANK && table.cards.length <= 3;
+  if (isBomb(play)) {
+    return twos
+      ? `${TWOS_NAMES[table.cards.length]} needs ${describeBombNeededForTwos(table.cards.length)}.`
+      : "That bomb can only beat 2s or another bomb.";
+  }
+  return twos || rules.bombsBeatAnything
+    ? `Beat the ${describeCombo(table)} with a higher one or a bomb.`
+    : `Needs a higher ${describeCombo(table)}.`;
 }
 
 /** Why `cards` can't be played right now, or null if they can. Written for display to the player. */
@@ -121,13 +152,7 @@ export function explainIllegalPlay(view: PlayerView, cards: readonly Card[]): st
   const combo = classify(cards);
   if (!combo) return "Not a valid combination.";
   if (view.table) {
-    if (!beats(view.table.combo, combo)) {
-      const t = view.table.combo;
-      if (isBomb(t)) return "Beat that bomb with a stronger bomb.";
-      return rankOf(t.top) === TWO_RANK
-        ? `Beat the ${describeCombo(t)} with a higher one or a bomb.`
-        : `Needs a higher ${describeCombo(t)}.`;
-    }
+    if (!beats(view.table.combo, combo, view.rules)) return explainFailedBeat(view.table.combo, combo, view.rules);
   } else if (view.openingRequired && !containsOpeningCard(combo.cards)) {
     return `The opening play must include ${cardLabel(THREE_OF_SPADES)}.`;
   }

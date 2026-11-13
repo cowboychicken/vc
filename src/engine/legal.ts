@@ -1,6 +1,6 @@
 import { type Card, rankOf, sortCards, TWO_RANK } from "./cards";
 import { type Combo, type ComboKind, beats } from "./combos";
-import { containsOpeningCard } from "./rules";
+import { DEFAULT_RULES, type RuleOptions, containsOpeningCard } from "./rules";
 
 const LAST_RUN_RANK = TWO_RANK - 1; // ace; 2s never appear in runs
 
@@ -51,9 +51,14 @@ export function allCombos(hand: readonly Card[]): Combo[] {
 }
 
 /** Legal plays for a hand facing `table`. `opening` restricts the lead to plays containing 3♠. */
-export function legalPlays(hand: readonly Card[], table: Combo | null, opening: boolean): Combo[] {
+export function legalPlays(
+  hand: readonly Card[],
+  table: Combo | null,
+  opening: boolean,
+  rules: RuleOptions = DEFAULT_RULES,
+): Combo[] {
   let plays = allCombos(hand);
-  if (table) plays = plays.filter((c) => beats(table, c));
+  if (table) plays = plays.filter((c) => beats(table, c, rules));
   else if (opening) plays = plays.filter((c) => containsOpeningCard(c.cards));
   return plays;
 }

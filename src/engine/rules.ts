@@ -2,6 +2,14 @@
 import { type Card, rankOf, sortCards, TWO_RANK, THREE_OF_SPADES } from "./cards";
 import type { Combo } from "./combos";
 
+/** Optional house rules. The defaults are the standard Miền Nam rules. */
+export interface RuleOptions {
+  /** A bomb can be played on any play. On another bomb, it must end in a higher card. */
+  bombsBeatAnything: boolean;
+}
+
+export const DEFAULT_RULES: RuleOptions = { bombsBeatAnything: false };
+
 /**
  * Chop strength. 0 means "not a bomb".
  * 3-pair run = 1, four of a kind = 2, 4-pair run = 3, 5-pair run = 4, ...
@@ -18,14 +26,24 @@ export function bombPower(c: Combo): number {
 /** Bomb power needed to chop a hand of 2s. */
 const POWER_NEEDED_FOR_TWOS: Record<number, number> = { 1: 1, 2: 2, 3: 3 };
 
+const BOMB_NEEDED_FOR_TWOS_TEXT: Record<number, string> = {
+  1: "any bomb",
+  2: "four of a kind or a 4-pair run",
+  3: "a 4-pair run or longer",
+};
+
+export const describeBombNeededForTwos = (count: number): string => BOMB_NEEDED_FOR_TWOS_TEXT[count] ?? "a longer bomb";
+
 /**
  * Plays that are not the same kind and size: a bomb over 2s of sufficient size, or a stronger bomb
  * over a bomb. Same kind and size is handled by the caller (compare top cards).
+ * With `bombsBeatAnything`, a bomb beats any non-bomb, and beats a bomb only by ending in a higher card.
  */
-export function canChop(prev: Combo, next: Combo): boolean {
+export function canChop(prev: Combo, next: Combo, rules: RuleOptions = DEFAULT_RULES): boolean {
   const power = bombPower(next);
   if (power === 0) return false;
   const prevPower = bombPower(prev);
+  if (rules.bombsBeatAnything) return prevPower === 0 || next.top > prev.top;
   if (prevPower > 0) return power > prevPower;
   const isTwos = rankOf(prev.top) === TWO_RANK && prev.cards.length <= 3;
   if (!isTwos) return false;

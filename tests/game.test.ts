@@ -7,13 +7,14 @@ import {
   explainIllegalPlay,
   legalMoves,
   newGame,
+  type RuleOptions,
   viewFor,
 } from "../src/engine";
 import { cs } from "./helpers";
 
 /** A free-lead game with hand-picked cards. */
-function setup(hands: string[], turn = 0): GameState {
-  return { ...newGame({ seed: 1, leader: turn }), hands: hands.map(cs), winner: null, instantWin: null };
+function setup(hands: string[], turn = 0, rules?: RuleOptions): GameState {
+  return { ...newGame({ seed: 1, leader: turn, rules }), hands: hands.map(cs), winner: null, instantWin: null };
 }
 const play = (s: GameState, labels: string) => applyMove(s, { type: "play", cards: cs(labels) });
 const pass = (s: GameState) => applyMove(s, { type: "pass" });
@@ -131,6 +132,45 @@ describe("turn flow", () => {
     expect(legalMoves(s).filter((m) => m.type === "play")).toHaveLength(1);
     s = play(s, "7♠ 7♣ 7♦ 7♥");
     expect(s.table?.seat).toBe(1);
+  });
+});
+
+describe("bomb rules", () => {
+  const hands = [
+    "7♠ 7♥ A♠",
+    "9♠ 9♣ 9♦ 9♥ K♠",
+    "3♠ 3♥ 4♣ 4♦ 5♥ 5♠ 10♠ 10♥ J♣ J♦ Q♥ Q♠",
+    "8♠",
+  ];
+  const lowRun = "3♠ 3♥ 4♣ 4♦ 5♥ 5♠";
+  const highRun = "10♠ 10♥ J♣ J♦ Q♥ Q♠";
+
+  it("by default a bomb can't be played on an ordinary pair, and the message says why", () => {
+    const s = play(setup(hands), "7♠ 7♥");
+    expect(() => play(s, "9♠ 9♣ 9♦ 9♥")).toThrow();
+    expect(explainIllegalPlay(viewFor(s, 1), cs("9♠ 9♣ 9♦ 9♥"))).toMatch(/only beat 2s or another bomb/);
+  });
+
+  it("by default a weak bomb on 2s says what is needed", () => {
+    const s = play(setup(["2♠ 2♥ 9♠", lowRun, "6♠", "8♠"]), "2♠ 2♥");
+    expect(explainIllegalPlay(viewFor(s, 1), cs(lowRun))).toMatch(/pair of 2s needs four of a kind or a 4-pair run/);
+  });
+
+  it("with the house rule a bomb beats a pair, and the next bomb must end higher", () => {
+    let s = setup(hands, 0, { bombsBeatAnything: true });
+    s = play(s, "7♠ 7♥");
+    s = play(s, "9♠ 9♣ 9♦ 9♥");
+    expect(s.table?.seat).toBe(1);
+    expect(explainIllegalPlay(viewFor(s, 2), cs(lowRun))).toMatch(/higher card/);
+    expect(() => play(s, lowRun)).toThrow();
+    s = play(s, highRun);
+    expect(s.table?.seat).toBe(2);
+  });
+
+  it("the rule travels in the view, so bots and the UI see the same legal moves", () => {
+    const s = setup(hands, 0, { bombsBeatAnything: true });
+    expect(viewFor(s, 1).rules).toEqual({ bombsBeatAnything: true });
+    expect(newGame({ seed: 3 }).rules).toEqual({ bombsBeatAnything: false });
   });
 });
 

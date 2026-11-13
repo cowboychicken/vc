@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type Bot, heuristicBot, playOut, randomBot } from "../src/bots";
-import { type GameState, makeRng, newGame, viewFor } from "../src/engine";
+import { type GameState, type RuleOptions, makeRng, newGame, viewFor } from "../src/engine";
 
 /** Wraps a bot to assert that it never sees anything beyond its own seat during play. */
 function spy(bot: Bot, state: { current: GameState }): Bot {
@@ -16,9 +16,9 @@ function spy(bot: Bot, state: { current: GameState }): Bot {
   };
 }
 
-function checkedGame(seed: number, bots: Bot[], leader?: number) {
+function checkedGame(seed: number, bots: Bot[], leader?: number, rules?: RuleOptions) {
   const rng = makeRng(seed ^ 0x9e3779b9);
-  const start = newGame({ seed, leader });
+  const start = newGame({ seed, leader, rules });
   const current = { current: start };
   const spies = bots.map((b) => spy(b, current));
   const final = playOut(start, spies, rng, (state) => {
@@ -44,6 +44,17 @@ describe("seeded bot games", () => {
     for (let seed = 1; seed <= 100; seed++) {
       const final = checkedGame(seed, Array(4).fill(randomBot));
       expect(final.winner).not.toBeNull();
+    }
+  });
+
+  it("plays legal, terminating, card-conserving games when bombs beat anything", () => {
+    const rules = { bombsBeatAnything: true };
+    for (const bot of [heuristicBot, randomBot]) {
+      for (let seed = 1; seed <= 80; seed++) {
+        const final = checkedGame(seed, Array(4).fill(bot), seed % 2 ? undefined : seed % 4, rules);
+        expect(final.winner).not.toBeNull();
+        expect(final.rules).toEqual(rules);
+      }
     }
   });
 

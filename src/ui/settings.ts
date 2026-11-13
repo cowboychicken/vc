@@ -1,4 +1,5 @@
 import { type Bot, heuristicBot, randomBot } from "../bots";
+import type { RuleOptions } from "../engine";
 
 export type BotSpeed = "fast" | "normal" | "slow";
 export type BotLevel = "easy" | "normal";
@@ -8,6 +9,7 @@ export interface Settings {
   botLevel: BotLevel;
   hints: boolean;
   moveLog: boolean;
+  bombsBeatAnything: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -15,7 +17,12 @@ export const DEFAULT_SETTINGS: Settings = {
   botLevel: "normal",
   hints: true,
   moveLog: true,
+  bombsBeatAnything: false,
 };
+
+export const rulesFromSettings = (settings: Settings): RuleOptions => ({
+  bombsBeatAnything: settings.bombsBeatAnything,
+});
 
 export const BOT_DELAY_MS: Record<BotSpeed, number> = { fast: 250, normal: 800, slow: 1400 };
 export const BOT_BY_LEVEL: Record<BotLevel, Bot> = { easy: randomBot, normal: heuristicBot };
@@ -36,6 +43,8 @@ export function parseSettings(raw: string | null): Settings {
     botLevel: data.botLevel === "easy" || data.botLevel === "normal" ? data.botLevel : DEFAULT_SETTINGS.botLevel,
     hints: typeof data.hints === "boolean" ? data.hints : DEFAULT_SETTINGS.hints,
     moveLog: typeof data.moveLog === "boolean" ? data.moveLog : DEFAULT_SETTINGS.moveLog,
+    bombsBeatAnything:
+      typeof data.bombsBeatAnything === "boolean" ? data.bombsBeatAnything : DEFAULT_SETTINGS.bombsBeatAnything,
   };
 }
 

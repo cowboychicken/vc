@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import type { GameState, NewGameOptions } from "../engine";
+import type { GameState, NewGameOptions, RuleOptions } from "../engine";
 import { type BotLevel, type BotSpeed, type Settings } from "./settings";
 
 type Tab = "game" | "rules" | "settings";
@@ -62,7 +62,7 @@ export function MenuDialog({ game, start, settings, onSettings, onNewDeal, onSam
         {tab === "game" && (
           <GameTab game={game} start={start} onNewDeal={onNewDeal} onSameDeal={onSameDeal} />
         )}
-        {tab === "rules" && <Rules />}
+        {tab === "rules" && <Rules rules={game.rules} />}
         {tab === "settings" && <SettingsTab settings={settings} onSettings={onSettings} />}
       </div>
     </div>
@@ -155,10 +155,21 @@ const RULES: { title: string; items: string[] }[] = [
   },
 ];
 
-function Rules() {
+const ANYTHING_BOMB_ITEMS = [
+  "Bombs: four of a kind, or a run of 3 or more pairs.",
+  "House rule on: a bomb can be played on any play, including 2s.",
+  "A bomb played on another bomb must end in a higher card (rank, then suit).",
+];
+
+function Rules({ rules }: { rules: RuleOptions }) {
+  const sections = RULES.map((section) =>
+    section.title === "Chops" && rules.bombsBeatAnything
+      ? { ...section, items: ANYTHING_BOMB_ITEMS }
+      : section,
+  );
   return (
     <div className="menu-body rules">
-      {RULES.map((section) => (
+      {sections.map((section) => (
         <section key={section.title}>
           <h3>{section.title}</h3>
           <ul>
@@ -213,6 +224,15 @@ function SettingsTab({ settings, onSettings }: Pick<Props, "settings" | "onSetti
   ];
   return (
     <div className="menu-body">
+      <Segmented
+        label="Bombs beat"
+        value={settings.bombsBeatAnything ? "anything" : "twos"}
+        options={[
+          { value: "twos", label: "2s only" },
+          { value: "anything", label: "Anything" },
+        ]}
+        onChange={(v) => set("bombsBeatAnything", v === "anything")}
+      />
       <Segmented<BotLevel>
         label="Bots"
         value={settings.botLevel}
@@ -244,7 +264,7 @@ function SettingsTab({ settings, onSettings }: Pick<Props, "settings" | "onSetti
         options={onOff}
         onChange={(v) => set("moveLog", v === "on")}
       />
-      <p className="note">Saved on this device.</p>
+      <p className="note">Saved on this device. Rule changes apply right away.</p>
     </div>
   );
 }

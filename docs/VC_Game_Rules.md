@@ -36,6 +36,16 @@ Bomb power: 3-pair run = 1, four of a kind = 2, 4-pair run = 3, 5-pair run = 4, 
 - Bombs are played in turn. There is no out-of-turn play.
 - Chopping carries no scoring or payment in the MVP.
 
+### House rule: bombs beat anything (off by default)
+
+Settings → **Bombs beat → Anything**. When on, `RuleOptions.bombsBeatAnything` is set on the game and:
+
+- A bomb can be played on any play, including 2s of any size.
+- A bomb played on another bomb must end in a higher card (rank, then suit), whatever the kinds of the two bombs. So four 7s can be beaten by a run of pairs ending in 8♥, and a 3-pair run cannot beat four 7s unless it ends higher.
+- A non-bomb still can never beat a bomb.
+
+The setting takes effect immediately, including on the deal in progress, and carries into later deals and replays.
+
 ## 5. Game flow
 
 - **First game:** the holder of 3♠ leads, and the opening play must contain the 3♠ (as a single, in a pair, triple, run, and so on).
