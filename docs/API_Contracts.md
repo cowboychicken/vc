@@ -1,4 +1,4 @@
-> **Status: not used by the MVP.** The game runs entirely in the browser, so there is no client/server boundary yet. Revisit this document only if a backend is added (for example for login or saved stats). Its rules assumptions are out of date; see [VC_Game_Rules.md](./VC_Game_Rules.md).
+> **Status: superseded.** This was a sketch for a FastAPI server that was never built. The game's real HTTP API (rooms, long-poll updates, moves) is documented in [ARCHITECTURE.md](./ARCHITECTURE.md#5-online-play-the-model) and implemented in `server/` and `src/net/protocol.ts`. Its rules assumptions are also out of date; see [VC_Game_Rules.md](./VC_Game_Rules.md).
 
 Project: VC Card Game & RL AI  
 Purpose: Define the strict REST API endpoints and JSON payloads for communication between the frontend UI and the FastAPI local server.

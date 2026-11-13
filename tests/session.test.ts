@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { heuristicBot, randomBot } from "../src/bots";
-import { applyMove, legalMoves } from "../src/engine";
-import { HUMAN, initSession, reduceSession, type Session } from "../src/ui/session";
+import { applyMove, decodeDeal, encodeDeal, legalMoves } from "../src/engine";
+import { HUMAN, initSession, isTurnShown, reduceSession, type Session } from "../src/ui/session";
 import { DEFAULT_SETTINGS, parseSettings } from "../src/ui/settings";
 
 /** Drives a session to the end: bots via the reducer, the human by taking its first legal move. */
@@ -98,6 +98,58 @@ describe("session reducer", () => {
     const s = initSession({ seed: 5, leader: 2 });
     expect(s.game.turn).toBe(2);
     expect(reduceSession(s, { type: "sameDeal" }).game.turn).toBe(2);
+  });
+});
+
+describe("deal codes in a session", () => {
+  it("loads a code into a fresh game with the same hands, leader and rules", () => {
+    const shared = initSession({ seed: 777, leader: 3, rules: { bombsBeatAnything: true } });
+    const code = encodeDeal(shared.start);
+    const mine = reduceSession(initSession({ seed: 1, rules: { bombsBeatAnything: false } }), {
+      type: "load",
+      deal: decodeDeal(code)!,
+    });
+    expect(mine.game.hands).toEqual(shared.game.hands);
+    expect(mine.game.turn).toBe(3);
+    expect(mine.game.rules).toEqual({ bombsBeatAnything: false }); // rules stay the player's own setting
+    expect(encodeDeal(mine.start)).toBe(code);
+  });
+
+  it("gives a first-game code that restores the 3♠ opening", () => {
+    const first = initSession({ seed: 41 });
+    const loaded = reduceSession(initSession({ seed: 2 }), { type: "load", deal: decodeDeal(encodeDeal(first.start))! });
+    expect(loaded.game.hands).toEqual(first.game.hands);
+    expect(loaded.game.openingRequired).toBe(first.game.openingRequired);
+    expect(loaded.game.turn).toBe(first.game.turn);
+  });
+
+  it("restarting a loaded deal keeps its code", () => {
+    let s = reduceSession(initSession({ seed: 1 }), { type: "load", deal: { seed: 99, leader: 2 } });
+    s = reduceSession(s, { type: "bot" });
+    s = reduceSession(s, { type: "sameDeal" });
+    expect(encodeDeal(s.start)).toBe(encodeDeal({ seed: 99, leader: 2 }));
+    expect(s.game.history).toHaveLength(0);
+  });
+});
+
+describe("turn pacing", () => {
+  it("shows the first turn, the human's turn and a finished game straight away", () => {
+    const start = initSession({ seed: 5, leader: 1 });
+    expect(isTurnShown(start.game, null)).toBe(true);
+    const afterBot = reduceSession(start, { type: "bot" });
+    const humanTurn = { ...afterBot.game, turn: HUMAN };
+    expect(isTurnShown(humanTurn, null)).toBe(true);
+    const over = { ...afterBot.game, winner: 2 };
+    expect(isTurnShown(over, null)).toBe(true);
+  });
+
+  it("holds back a bot's turn after a move until that exact state is revealed", () => {
+    const afterBot = reduceSession(initSession({ seed: 5, leader: 1 }), { type: "bot" });
+    expect(afterBot.game.turn).not.toBe(HUMAN);
+    expect(isTurnShown(afterBot.game, null)).toBe(false);
+    expect(isTurnShown(afterBot.game, afterBot.game)).toBe(true);
+    const next = reduceSession(afterBot, { type: "bot" });
+    if (next.game.turn !== HUMAN) expect(isTurnShown(next.game, afterBot.game)).toBe(false);
   });
 });
 

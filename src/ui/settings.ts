@@ -1,8 +1,8 @@
-import { type Bot, heuristicBot, randomBot } from "../bots";
+import { BOT_BY_LEVEL, type BotLevel } from "../bots";
 import type { RuleOptions } from "../engine";
 
+export { BOT_BY_LEVEL, type BotLevel };
 export type BotSpeed = "fast" | "normal" | "slow";
-export type BotLevel = "easy" | "normal";
 
 export interface Settings {
   botSpeed: BotSpeed;
@@ -13,19 +13,26 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  botSpeed: "normal",
+  botSpeed: "fast",
   botLevel: "normal",
   hints: true,
   moveLog: true,
-  bombsBeatAnything: false,
+  bombsBeatAnything: true,
 };
 
 export const rulesFromSettings = (settings: Settings): RuleOptions => ({
   bombsBeatAnything: settings.bombsBeatAnything,
 });
 
-export const BOT_DELAY_MS: Record<BotSpeed, number> = { fast: 250, normal: 800, slow: 1400 };
-export const BOT_BY_LEVEL: Record<BotLevel, Bot> = { easy: randomBot, normal: heuristicBot };
+/**
+ * `gap`: pause after a move before the next bot lights up. `think`: how long that bot stays lit
+ * before its card appears.
+ */
+export const BOT_TIMING: Record<BotSpeed, { gap: number; think: number }> = {
+  fast: { gap: 80, think: 170 },
+  normal: { gap: 300, think: 480 },
+  slow: { gap: 500, think: 900 },
+};
 
 const STORAGE_KEY = "vc13.settings";
 

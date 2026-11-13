@@ -1,0 +1,133 @@
+import { useEffect, useMemo, useReducer, useState } from "react";
+import { type GameState, encodeDeal, viewFor } from "../engine";
+import type { Profile } from "../net/protocol";
+import { GameScreen } from "./GameScreen";
+import { LocalGameTab, MenuDialog, type MenuTab, BombRow, BotLevelRow, PersonalRows, RulesTab } from "./Menu";
+import { OnlineTab, type OnlineIntent } from "./OnlineTab";
+import { LOCAL_PLAYERS, PlayersContext } from "./players";
+import { HUMAN, initSession, isTurnShown, reduceSession } from "./session";
+import { BOT_BY_LEVEL, BOT_TIMING, type Settings, rulesFromSettings } from "./settings";
+import { randomSeed, startingOptions } from "./url";
+
+interface Props {
+  settings: Settings;
+  onSettings: (settings: Settings) => void;
+  profile: Profile;
+  onProfile: (profile: Profile) => void;
+  onOnline: (intent: OnlineIntent) => void;
+}
+
+/** Single player: you at the bottom, three bots, everything running in this browser. */
+export function LocalGame({ settings, onSettings, profile, onProfile, onOnline }: Props) {
+  const [session, dispatch] = useReducer(reduceSession, undefined, () =>
+    initSession({ ...startingOptions(), rules: rulesFromSettings(settings) }),
+  );
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [revealed, setRevealed] = useState<GameState | null>(null);
+  const { game } = session;
+  const view = useMemo(() => viewFor(game, HUMAN), [game]);
+  const turnShown = isTurnShown(game, revealed);
+  const dealCode = encodeDeal(session.start);
+
+  const updateSettings = (next: Settings) => {
+    onSettings(next);
+    dispatch({ type: "rules", rules: rulesFromSettings(next) });
+  };
+
+  // A bot's turn plays out in two beats: first it lights up, then its card lands.
+  // Bots wait while the menu is open.
+  useEffect(() => {
+    if (menuOpen || game.winner !== null || game.turn === HUMAN) return;
+    const timing = BOT_TIMING[settings.botSpeed];
+    const id = window.setTimeout(
+      turnShown ? () => dispatch({ type: "bot", bot: BOT_BY_LEVEL[settings.botLevel] }) : () => setRevealed(game),
+      turnShown ? timing.think : timing.gap,
+    );
+    return () => window.clearTimeout(id);
+  }, [game, turnShown, menuOpen, settings.botLevel, settings.botSpeed]);
+
+  const closeMenu = () => setMenuOpen(false);
+
+  const tabs: MenuTab[] = [
+    {
+      id: "game",
+      label: "Game",
+      content: (
+        <LocalGameTab
+          game={game}
+          dealCode={dealCode}
+          onNewDeal={() => {
+            dispatch(game.winner !== null ? { type: "rematch", seed: randomSeed() } : { type: "restart", seed: randomSeed() });
+            closeMenu();
+          }}
+          onSameDeal={() => {
+            dispatch({ type: "sameDeal" });
+            closeMenu();
+          }}
+          onLoadDeal={(deal) => {
+            dispatch({ type: "load", deal });
+            closeMenu();
+          }}
+        />
+      ),
+    },
+    {
+      id: "online",
+      label: "Online",
+      content: (
+        <OnlineTab
+          profile={profile}
+          onProfile={onProfile}
+          onStart={(intent) => {
+            closeMenu();
+            onOnline(intent);
+          }}
+        />
+      ),
+    },
+    { id: "rules", label: "Rules", content: <RulesTab rules={game.rules} /> },
+    {
+      id: "settings",
+      label: "Settings",
+      content: (
+        <div className="menu-body">
+          <BombRow
+            anything={settings.bombsBeatAnything}
+            onChange={(bombsBeatAnything) => updateSettings({ ...settings, bombsBeatAnything })}
+          />
+          <BotLevelRow level={settings.botLevel} onChange={(botLevel) => updateSettings({ ...settings, botLevel })} />
+          <PersonalRows settings={settings} onSettings={updateSettings} />
+          <p className="note">Saved on this device. Rule changes apply right away.</p>
+        </div>
+      ),
+    },
+  ];
+
+  const leader = game.winner === null ? null : LOCAL_PLAYERS.names[game.winner];
+
+  return (
+    <PlayersContext.Provider value={LOCAL_PLAYERS}>
+      <GameScreen
+        view={view}
+        turnShown={turnShown}
+        settings={settings}
+        record={`Won ${session.won} of ${session.played}`}
+        dealCode={dealCode}
+        onMove={(move) => dispatch({ type: "human", move })}
+        onOpenMenu={() => setMenuOpen(true)}
+        gameOverActions={
+          <>
+            <button type="button" className="primary" onClick={() => dispatch({ type: "rematch", seed: randomSeed() })} autoFocus>
+              Play again{game.winner === HUMAN ? "" : ` (${leader} leads)`}
+            </button>
+            <button type="button" onClick={() => dispatch({ type: "sameDeal" })}>
+              Replay this deal
+            </button>
+          </>
+        }
+      >
+        {menuOpen && <MenuDialog tabs={tabs} onClose={closeMenu} />}
+      </GameScreen>
+    </PlayersContext.Provider>
+  );
+}

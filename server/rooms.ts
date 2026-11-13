@@ -1,0 +1,484 @@
+import { randomBytes, randomInt, timingSafeEqual } from "node:crypto";
+import { BOT_BY_LEVEL, type BotLevel, botMove } from "../src/bots";
+import {
+  DEFAULT_RULES,
+  type GameState,
+  type Move,
+  type RuleOptions,
+  applyMove,
+  decodeDeal,
+  encodeDeal,
+  makeRng,
+  newGame,
+  viewFor,
+} from "../src/engine";
+import {
+  type ColorId,
+  type ErrorCode,
+  type Frame,
+  NUM_SEATS,
+  type Phase,
+  type Profile,
+  ROOM_ALPHABET,
+  ROOM_CODE_LENGTH,
+  type RoomInfo,
+  type UpdateResponse,
+  botName,
+  uniqueName,
+} from "../src/net/protocol";
+
+export class RoomError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: ErrorCode,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+export interface ManagerOptions {
+  now?: () => number;
+  /** A random integer in [0, max). Replaceable so tests can be deterministic. */
+  randomInt?: (max: number) => number;
+  randomToken?: () => string;
+  maxRooms?: number;
+  /** How long a human can go unheard before a bot covers their turns. */
+  awayMs?: number;
+  /** How long a room with nobody around is kept. */
+  emptyRoomMs?: number;
+  /** Frames kept per room, and the most sent in one response. */
+  keepFrames?: number;
+  maxFramesPerResponse?: number;
+}
+
+interface Seat {
+  kind: "human" | "bot";
+  name: string;
+  color: ColorId | null;
+  token: string | null;
+  lastSeen: number;
+  /** The away flag clients were last told about. */
+  shownAway: boolean;
+}
+
+interface StoredFrame {
+  n: number;
+  kind: "deal" | "move";
+  by: number;
+  bot: boolean;
+  state: GameState;
+}
+
+interface Room {
+  code: string;
+  rev: number;
+  phase: Phase;
+  seats: Seat[];
+  host: number;
+  rules: RuleOptions;
+  botLevel: BotLevel;
+  games: number;
+  wins: number[];
+  lastWinner: number | null;
+  game: GameState | null;
+  dealCode: string | null;
+  frames: StoredFrame[];
+  nextN: number;
+  lastActive: number;
+}
+
+const MAX_BOT_MOVES = 1000;
+
+function safeEqual(a: string, b: string): boolean {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+}
+
+export class RoomManager {
+  private readonly rooms = new Map<string, Room>();
+  private readonly listeners = new Map<string, Set<() => void>>();
+  private readonly now: () => number;
+  private readonly rand: (max: number) => number;
+  private readonly newToken: () => string;
+  private readonly maxRooms: number;
+  private readonly awayMs: number;
+  private readonly emptyRoomMs: number;
+  private readonly keepFrames: number;
+  private readonly maxFramesPerResponse: number;
+
+  constructor(options: ManagerOptions = {}) {
+    this.now = options.now ?? Date.now;
+    this.rand = options.randomInt ?? ((max) => randomInt(max));
+    this.newToken = options.randomToken ?? (() => randomBytes(16).toString("hex"));
+    this.maxRooms = options.maxRooms ?? 200;
+    this.awayMs = options.awayMs ?? 45_000;
+    this.emptyRoomMs = options.emptyRoomMs ?? 30 * 60_000;
+    this.keepFrames = options.keepFrames ?? 40;
+    this.maxFramesPerResponse = options.maxFramesPerResponse ?? 12;
+  }
+
+  get roomCount(): number {
+    return this.rooms.size;
+  }
+
+  /** How many pollers are waiting on a room. For tests and diagnostics. */
+  listenerCount(code: string): number {
+    return this.listeners.get(code)?.size ?? 0;
+  }
+
+  // --- Joining and leaving ---------------------------------------------------------------------
+
+  create(profile: Profile, prefs: { rules?: RuleOptions; botLevel?: BotLevel } = {}): { code: string; token: string } {
+    if (this.rooms.size >= this.maxRooms) {
+      throw new RoomError(429, "rate_limited", "The server is full of rooms right now. Try again soon.");
+    }
+    let code: string;
+    do {
+      code = Array.from({ length: ROOM_CODE_LENGTH }, () => ROOM_ALPHABET[this.rand(ROOM_ALPHABET.length)]).join("");
+    } while (this.rooms.has(code));
+    const token = this.newToken();
+    const now = this.now();
+    const seats: Seat[] = Array.from({ length: NUM_SEATS }, (_, i) => this.botSeat(i, now));
+    seats[0] = { kind: "human", name: this.nameFor(profile.name, seats, 0), color: profile.color, token, lastSeen: now, shownAway: false };
+    this.rooms.set(code, {
+      code,
+      rev: 1,
+      phase: "lobby",
+      seats,
+      host: 0,
+      rules: prefs.rules ?? DEFAULT_RULES,
+      botLevel: prefs.botLevel ?? "normal",
+      games: 0,
+      wins: new Array<number>(NUM_SEATS).fill(0),
+      lastWinner: null,
+      game: null,
+      dealCode: null,
+      frames: [],
+      nextN: 0,
+      lastActive: now,
+    });
+    return { code, token };
+  }
+
+  /** Takes a seat. With a token from an earlier visit, takes the same seat back. */
+  join(code: string, profile: Profile, token?: string): { token: string } {
+    const room = this.room(code);
+    const now = this.now();
+    room.lastActive = now;
+    const existing = token ? this.seatOf(room, token) : -1;
+    if (existing >= 0) {
+      const seat = room.seats[existing]!;
+      seat.lastSeen = now;
+      seat.name = this.nameFor(profile.name, room.seats, existing);
+      seat.color = profile.color;
+      this.refreshAway(room);
+      this.touch(room);
+      return { token: seat.token! };
+    }
+    const free = room.seats.findIndex((s) => s.kind === "bot");
+    if (free < 0) throw new RoomError(409, "conflict", "This room is full.");
+    const newToken = this.newToken();
+    room.seats[free] = {
+      kind: "human",
+      name: this.nameFor(profile.name, room.seats, free),
+      color: profile.color,
+      token: newToken,
+      lastSeen: now,
+      shownAway: false,
+    };
+    this.touch(room);
+    return { token: newToken };
+  }
+
+  leave(code: string, token: string): void {
+    const room = this.room(code);
+    const seat = this.auth(room, token);
+    room.seats[seat] = this.botSeat(seat, this.now());
+    if (!room.seats.some((s) => s.kind === "human")) {
+      this.deleteRoom(room);
+      return;
+    }
+    if (room.host === seat) room.host = this.firstHuman(room, true);
+    this.advanceBots(room);
+    this.touch(room);
+  }
+
+  setProfile(code: string, token: string, profile: Profile): void {
+    const room = this.room(code);
+    const seat = this.auth(room, token);
+    room.seats[seat]!.name = this.nameFor(profile.name, room.seats, seat);
+    room.seats[seat]!.color = profile.color;
+    this.touch(room);
+  }
+
+  // --- Host actions ----------------------------------------------------------------------------
+
+  setSettings(code: string, token: string, patch: { rules?: RuleOptions; botLevel?: BotLevel }): void {
+    const room = this.room(code);
+    this.requireHost(room, this.auth(room, token));
+    if (patch.rules !== undefined) {
+      if (room.phase === "playing") throw new RoomError(409, "conflict", "Rules can only change between games.");
+      room.rules = patch.rules;
+    }
+    if (patch.botLevel !== undefined) room.botLevel = patch.botLevel;
+    this.touch(room);
+  }
+
+  /** Starts the first game, or the next one. Without a deal code the deal is random. */
+  start(code: string, token: string, dealCode?: string): void {
+    const room = this.room(code);
+    this.requireHost(room, this.auth(room, token));
+    if (room.phase === "playing") throw new RoomError(409, "conflict", "A game is already running.");
+    let seed: number;
+    let leader: number | undefined;
+    if (dealCode !== undefined && dealCode.trim() !== "") {
+      const deal = decodeDeal(dealCode);
+      if (!deal) throw new RoomError(400, "bad_request", "That isn't a valid deal code.");
+      ({ seed, leader } = deal);
+    } else {
+      seed = this.rand(2 ** 32);
+      // The first game opens with the 3♠; after that the last winner leads.
+      leader = room.lastWinner ?? undefined;
+    }
+    const game = newGame({ seed, leader, rules: room.rules });
+    room.game = game;
+    room.dealCode = encodeDeal({ seed, leader });
+    this.push(room, "deal", -1, false, game);
+    if (game.winner !== null) this.finish(room);
+    else {
+      room.phase = "playing";
+      this.advanceBots(room);
+    }
+    this.touch(room);
+  }
+
+  // --- Playing ---------------------------------------------------------------------------------
+
+  move(code: string, token: string, move: Move): void {
+    const room = this.room(code);
+    const seat = this.auth(room, token);
+    if (room.phase !== "playing" || !room.game) throw new RoomError(409, "conflict", "There is no game in progress.");
+    if (room.game.turn !== seat) throw new RoomError(409, "conflict", "It isn't your turn.");
+    let next: GameState;
+    try {
+      next = applyMove(room.game, move);
+    } catch (error) {
+      throw new RoomError(400, "bad_request", error instanceof Error ? error.message : "Illegal move.");
+    }
+    room.seats[seat]!.lastSeen = this.now();
+    this.apply(room, seat, false, next);
+    this.advanceBots(room);
+    this.touch(room);
+  }
+
+  // --- Reading ---------------------------------------------------------------------------------
+
+  /** What a seat needs to catch up: the room, and the frames after `since`. Also counts as being present. */
+  update(code: string, token: string, since: number): UpdateResponse {
+    const room = this.room(code);
+    const seat = this.auth(room, token);
+    const now = this.now();
+    room.seats[seat]!.lastSeen = now;
+    room.lastActive = now;
+    if (this.refreshAway(room)) this.touch(room);
+    return this.response(room, seat, since);
+  }
+
+  /** Public details of a room, for a join screen. */
+  peek(code: string): RoomInfo | null {
+    const room = this.rooms.get(code);
+    return room ? this.info(room) : null;
+  }
+
+  /** Marks a seat as present without building a response. Used when a long poll starts. */
+  seen(code: string, token: string): void {
+    const room = this.room(code);
+    const seat = this.auth(room, token);
+    const now = this.now();
+    room.seats[seat]!.lastSeen = now;
+    room.lastActive = now;
+    if (this.refreshAway(room)) this.touch(room);
+  }
+
+  /** True if the seat's client is out of date and a long poll should answer straight away. */
+  hasNews(code: string, token: string, since: number, rev: number): boolean {
+    const room = this.room(code);
+    this.auth(room, token);
+    const lastN = room.frames.length > 0 ? room.frames[room.frames.length - 1]!.n : -1;
+    return room.rev !== rev || lastN > since;
+  }
+
+  /** Calls back whenever the room changes, or goes away. */
+  subscribe(code: string, callback: () => void): () => void {
+    let set = this.listeners.get(code);
+    if (!set) this.listeners.set(code, (set = new Set()));
+    set.add(callback);
+    return () => {
+      set.delete(callback);
+      // Only drop the entry if it is still this set; a later subscriber may have created a new one.
+      if (set.size === 0 && this.listeners.get(code) === set) this.listeners.delete(code);
+    };
+  }
+
+  /** Housekeeping for the clock: absent players, host handover, covering bots, expired rooms. */
+  sweep(): string[] {
+    const changed: string[] = [];
+    const now = this.now();
+    for (const room of [...this.rooms.values()]) {
+      let dirty = this.refreshAway(room);
+      if (this.isAway(room.seats[room.host]!)) {
+        const next = this.firstHuman(room, true);
+        if (next !== room.host && !this.isAway(room.seats[next]!)) {
+          room.host = next;
+          dirty = true;
+        }
+      }
+      if (this.advanceBots(room)) dirty = true;
+      const anyonePresent = room.seats.some((s) => s.kind === "human" && !this.isAway(s));
+      if (!anyonePresent && now - room.lastActive > this.emptyRoomMs) {
+        this.deleteRoom(room);
+        changed.push(room.code);
+        continue;
+      }
+      if (dirty) {
+        this.touch(room);
+        changed.push(room.code);
+      }
+    }
+    return changed;
+  }
+
+  // --- Internals -------------------------------------------------------------------------------
+
+  private room(code: string): Room {
+    const room = this.rooms.get(code);
+    if (!room) throw new RoomError(404, "not_found", "That room doesn't exist any more.");
+    return room;
+  }
+
+  private seatOf(room: Room, token: string): number {
+    return room.seats.findIndex((s) => s.token !== null && safeEqual(s.token, token));
+  }
+
+  private auth(room: Room, token: string): number {
+    const seat = token ? this.seatOf(room, token) : -1;
+    if (seat < 0) throw new RoomError(401, "unauthorized", "You are no longer in this room.");
+    room.lastActive = this.now(); // only a player acting counts as activity, never the server's own housekeeping
+    return seat;
+  }
+
+  private requireHost(room: Room, seat: number): void {
+    if (room.host !== seat) throw new RoomError(403, "forbidden", "Only the host can do that.");
+  }
+
+  private botSeat(index: number, now: number): Seat {
+    return { kind: "bot", name: botName(index), color: null, token: null, lastSeen: now, shownAway: false };
+  }
+
+  private nameFor(wanted: string, seats: readonly Seat[], self: number): string {
+    // Bot names are always reserved, so a player can never be mistaken for a bot.
+    const reserved = Array.from({ length: NUM_SEATS }, (_, i) => botName(i));
+    return uniqueName(wanted, [...seats.filter((_, i) => i !== self).map((s) => s.name), ...reserved]);
+  }
+
+  private isAway(seat: Seat): boolean {
+    return seat.kind === "human" && this.now() - seat.lastSeen > this.awayMs;
+  }
+
+  /** Brings each seat's published away flag up to date. Returns true if any changed. */
+  private refreshAway(room: Room): boolean {
+    let changed = false;
+    for (const seat of room.seats) {
+      const away = this.isAway(seat);
+      if (seat.shownAway !== away) {
+        seat.shownAway = away;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  /** The first human seat, preferring those who are around. */
+  private firstHuman(room: Room, preferPresent: boolean): number {
+    const humans = room.seats.map((s, i) => ({ s, i })).filter(({ s }) => s.kind === "human");
+    const present = humans.find(({ s }) => !this.isAway(s));
+    return (preferPresent && present ? present : humans[0])!.i;
+  }
+
+  private push(room: Room, kind: "deal" | "move", by: number, bot: boolean, state: GameState): void {
+    room.frames.push({ n: room.nextN++, kind, by, bot, state });
+    if (room.frames.length > this.keepFrames) room.frames.splice(0, room.frames.length - this.keepFrames);
+  }
+
+  private apply(room: Room, by: number, bot: boolean, next: GameState): void {
+    room.game = next;
+    this.push(room, "move", by, bot, next);
+    if (next.winner !== null) this.finish(room);
+  }
+
+  private finish(room: Room): void {
+    const winner = room.game!.winner!;
+    room.games++;
+    room.wins[winner]!++;
+    room.lastWinner = winner;
+    room.phase = "over";
+  }
+
+  /** Plays for every seat that has no human in charge, until a present human is up or the game ends. */
+  private advanceBots(room: Room): boolean {
+    let moved = false;
+    for (let i = 0; i < MAX_BOT_MOVES && room.phase === "playing" && room.game && room.game.winner === null; i++) {
+      const game = room.game;
+      const seat = room.seats[game.turn]!;
+      if (seat.kind === "human" && !this.isAway(seat)) break;
+      const rng = makeRng(game.seed * 31 + game.history.length);
+      this.apply(room, game.turn, true, applyMove(game, botMove(game, BOT_BY_LEVEL[room.botLevel], rng)));
+      moved = true;
+    }
+    return moved;
+  }
+
+  private touch(room: Room): void {
+    room.rev++;
+    this.notify(room.code);
+  }
+
+  private notify(code: string): void {
+    for (const callback of [...(this.listeners.get(code) ?? [])]) callback();
+  }
+
+  private deleteRoom(room: Room): void {
+    this.rooms.delete(room.code);
+    this.notify(room.code);
+  }
+
+  private info(room: Room): RoomInfo {
+    return {
+      code: room.code,
+      rev: room.rev,
+      phase: room.phase,
+      seats: room.seats.map((s, i) => ({
+        kind: s.kind,
+        name: s.name,
+        color: s.color,
+        away: s.shownAway,
+        host: i === room.host,
+      })),
+      host: room.host,
+      settings: { rules: room.rules, botLevel: room.botLevel },
+      games: room.games,
+      wins: [...room.wins],
+      dealCode: room.dealCode,
+    };
+  }
+
+  private response(room: Room, seat: number, since: number): UpdateResponse {
+    const frames: Frame[] = room.frames
+      .filter((f) => f.n > since)
+      .slice(-this.maxFramesPerResponse)
+      .map((f) => ({ n: f.n, kind: f.kind, by: f.by, bot: f.bot, view: viewFor(f.state, seat) }));
+    return { seat, room: this.info(room), frames };
+  }
+}

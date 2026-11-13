@@ -1,5 +1,6 @@
 import { type Bot, botMove, heuristicBot } from "../bots";
 import {
+  type Deal,
   type GameState,
   type Move,
   type NewGameOptions,
@@ -10,7 +11,6 @@ import {
 } from "../engine";
 
 export const HUMAN = 0;
-export const SEAT_NAMES = ["You", "Bot One", "Bot Two", "Bot Three"] as const;
 
 export interface Session {
   game: GameState;
@@ -26,6 +26,7 @@ export type SessionAction =
   | { type: "rematch"; seed: number }
   | { type: "restart"; seed: number }
   | { type: "sameDeal" }
+  | { type: "load"; deal: Deal }
   | { type: "rules"; rules: RuleOptions };
 
 function begin(prev: Pick<Session, "played" | "won">, start: NewGameOptions): Session {
@@ -36,6 +37,15 @@ function begin(prev: Pick<Session, "played" | "won">, start: NewGameOptions): Se
 function tally({ played, won }: Pick<Session, "played" | "won">, game: GameState) {
   if (game.winner === null) return { played, won };
   return { played: played + 1, won: won + (game.winner === HUMAN ? 1 : 0) };
+}
+
+/**
+ * A bot's turn is only shown (highlighted, "thinking") once `revealed` is that exact game state.
+ * That leaves a beat after each move, so the card shows up before the next player lights up.
+ * The human's turn, a game's first turn, and a finished game are never held back.
+ */
+export function isTurnShown(game: GameState, revealed: GameState | null): boolean {
+  return game.winner !== null || game.turn === HUMAN || game.history.length === 0 || revealed === game;
 }
 
 export const initSession = (start: NewGameOptions): Session => begin({ played: 0, won: 0 }, start);
@@ -67,6 +77,8 @@ export function reduceSession(session: Session, action: SessionAction): Session 
       return begin(session, { seed: action.seed, rules: game.rules });
     case "sameDeal":
       return begin(session, session.start);
+    case "load":
+      return begin(session, { ...action.deal, rules: game.rules });
     case "rules":
       // House rules apply immediately, and carry into later deals and replays.
       if (JSON.stringify(game.rules) === JSON.stringify(action.rules)) return session;

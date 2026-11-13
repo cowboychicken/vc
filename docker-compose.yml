@@ -1,0 +1,30 @@
+# One container serves the app and the room API on port 3000. Rooms live in memory, so there is
+# nothing to back up (and a restart ends any games in progress).
+#
+# The labels below assume Traefik on a shared Docker network, with a Cloudflare Tunnel pointing at
+# Traefik's plain-HTTP entrypoint (Cloudflare handles TLS). Adjust the names marked CHANGE to match
+# your Traefik setup.
+services:
+  vc13:
+    build: .
+    image: vc13:latest
+    restart: unless-stopped
+    environment:
+      # Traffic only arrives through Traefik and Cloudflare, so trust the client IP they pass along.
+      # This is what the room-creation rate limit keys on.
+      TRUST_PROXY: "true"
+    networks:
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy # CHANGE: the network Traefik shares with this container
+      - traefik.http.routers.vc13.rule=Host(`vc13.com`) # CHANGE: your hostname
+      - traefik.http.routers.vc13.entrypoints=web # CHANGE: your HTTP entrypoint
+      - traefik.http.services.vc13.loadbalancer.server.port=3000
+    # To try it without Traefik, comment out `networks` and `labels` and publish the port instead:
+    # ports:
+    #   - "3000:3000"
+
+networks:
+  proxy:
+    external: true # CHANGE: the existing Traefik network

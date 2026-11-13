@@ -1,35 +1,16 @@
-import { useEffect, useId, useState } from "react";
-import type { GameState, NewGameOptions, RuleOptions } from "../engine";
-import { type BotLevel, type BotSpeed, type Settings } from "./settings";
+import { type ReactNode, useEffect, useId, useState } from "react";
+import { type Deal, type GameState, type RuleOptions, decodeDeal } from "../engine";
+import type { BotLevel, BotSpeed, Settings } from "./settings";
 
-type Tab = "game" | "rules" | "settings";
-const TABS: { id: Tab; label: string }[] = [
-  { id: "game", label: "Game" },
-  { id: "rules", label: "Rules" },
-  { id: "settings", label: "Settings" },
-];
-
-interface Props {
-  game: GameState;
-  start: NewGameOptions;
-  settings: Settings;
-  onSettings: (settings: Settings) => void;
-  onNewDeal: () => void;
-  onSameDeal: () => void;
-  onClose: () => void;
+export interface MenuTab {
+  id: string;
+  label: string;
+  content: ReactNode;
 }
 
-export function dealUrl({ seed, leader }: NewGameOptions): string {
-  const url = new URL(window.location.href);
-  url.search = "";
-  url.hash = "";
-  url.searchParams.set("seed", String(seed));
-  if (leader !== undefined) url.searchParams.set("leader", String(leader));
-  return url.toString();
-}
-
-export function MenuDialog({ game, start, settings, onSettings, onNewDeal, onSameDeal, onClose }: Props) {
-  const [tab, setTab] = useState<Tab>("game");
+export function MenuDialog({ tabs, onClose }: { tabs: MenuTab[]; onClose: () => void }) {
+  const [tabId, setTabId] = useState(tabs[0]!.id);
+  const tab = tabs.find((t) => t.id === tabId) ?? tabs[0]!;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -42,14 +23,14 @@ export function MenuDialog({ game, start, settings, onSettings, onNewDeal, onSam
       <div className="dialog menu" role="dialog" aria-modal="true" aria-label="Menu">
         <div className="menu-head">
           <div className="tabs" role="tablist">
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 role="tab"
-                aria-selected={tab === t.id}
-                className={tab === t.id ? "on" : ""}
-                onClick={() => setTab(t.id)}
+                aria-selected={tab.id === t.id}
+                className={tab.id === t.id ? "on" : ""}
+                onClick={() => setTabId(t.id)}
               >
                 {t.label}
               </button>
@@ -59,61 +40,120 @@ export function MenuDialog({ game, start, settings, onSettings, onNewDeal, onSam
             ×
           </button>
         </div>
-        {tab === "game" && (
-          <GameTab game={game} start={start} onNewDeal={onNewDeal} onSameDeal={onSameDeal} />
-        )}
-        {tab === "rules" && <Rules rules={game.rules} />}
-        {tab === "settings" && <SettingsTab settings={settings} onSettings={onSettings} />}
+        {tab.content}
       </div>
     </div>
   );
 }
 
-function GameTab({
-  game,
-  start,
-  onNewDeal,
-  onSameDeal,
-}: Pick<Props, "game" | "start" | "onNewDeal" | "onSameDeal">) {
-  const inProgress = game.winner === null && game.history.length > 0;
-  const [confirm, setConfirm] = useState<"new" | "same" | null>(null);
-  const [copied, setCopied] = useState<"yes" | "no" | null>(null);
+export function dealUrl(dealCode: string): string {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("code", dealCode);
+  return url.toString();
+}
 
-  const act = (kind: "new" | "same", run: () => void) => () => {
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// --- Single-player game tab ----------------------------------------------------------------------
+
+type Confirm = "new" | "same" | "load";
+
+interface LocalGameTabProps {
+  game: GameState;
+  dealCode: string;
+  onNewDeal: () => void;
+  onSameDeal: () => void;
+  onLoadDeal: (deal: Deal) => void;
+}
+
+export function LocalGameTab({ game, dealCode, onNewDeal, onSameDeal, onLoadDeal }: LocalGameTabProps) {
+  const inProgress = game.winner === null && game.history.length > 0;
+  const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const [note, setNote] = useState("");
+  const [entered, setEntered] = useState("");
+
+  // Leaving a game in progress takes a second tap.
+  const act = (kind: Confirm, run: () => void) => {
     if (inProgress && confirm !== kind) return setConfirm(kind);
     run();
   };
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(dealUrl(start));
-      setCopied("yes");
-    } catch {
-      setCopied("no");
-    }
+  const copy = async (text: string, done: string) => {
+    setNote((await copyText(text)) ? done : "Could not copy. Select the text instead.");
+  };
+  const loadEntered = () => {
+    const deal = decodeDeal(entered);
+    if (!deal) return setNote("That isn't a valid deal code. Check it and try again.");
+    setNote("");
+    act("load", () => onLoadDeal(deal));
   };
 
   return (
     <div className="menu-body">
-      <p>
-        Deal <b>#{game.seed}</b>
-      </p>
+      <div className="code-row">
+        <div>
+          <span className="code-label">Deal code</span>
+          <b className="code" data-testid="deal-code">
+            {dealCode}
+          </b>
+        </div>
+        <button type="button" onClick={() => copy(dealCode, "Code copied.")}>
+          Copy
+        </button>
+      </div>
       <div className="menu-actions">
-        <button type="button" onClick={act("new", onNewDeal)}>
+        <button type="button" onClick={() => act("new", onNewDeal)}>
           {confirm === "new" ? "Abandon game? Tap again" : "New deal"}
         </button>
-        <button type="button" onClick={act("same", onSameDeal)}>
+        <button type="button" onClick={() => act("same", onSameDeal)}>
           {confirm === "same" ? "Abandon game? Tap again" : "Restart this deal"}
         </button>
-        <button type="button" onClick={copy}>
+        <button type="button" onClick={() => copy(dealUrl(dealCode), "Link copied.")}>
           Copy link to this deal
         </button>
       </div>
+      <form
+        className="code-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          loadEntered();
+        }}
+      >
+        <input
+          value={entered}
+          onChange={(e) => {
+            setEntered(e.target.value);
+            setConfirm(null);
+            setNote("");
+          }}
+          placeholder="Enter a deal code"
+          aria-label="Deal code to load"
+          maxLength={16}
+          autoCapitalize="characters"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+        />
+        <button type="submit" disabled={entered.trim() === ""}>
+          {confirm === "load" ? "Abandon game? Tap again" : "Play code"}
+        </button>
+      </form>
       <p className="note" role="status">
-        {copied === "yes" ? "Link copied." : copied === "no" ? "Could not copy the link." : "\u00a0"}
+        {note || "\u00a0"}
       </p>
     </div>
   );
 }
+
+// --- Rules -------------------------------------------------------------------------------------
 
 const RULES: { title: string; items: string[] }[] = [
   {
@@ -161,11 +201,9 @@ const ANYTHING_BOMB_ITEMS = [
   "A bomb played on another bomb must end in a higher card (rank, then suit).",
 ];
 
-function Rules({ rules }: { rules: RuleOptions }) {
+export function RulesTab({ rules }: { rules: RuleOptions }) {
   const sections = RULES.map((section) =>
-    section.title === "Chops" && rules.bombsBeatAnything
-      ? { ...section, items: ANYTHING_BOMB_ITEMS }
-      : section,
+    section.title === "Chops" && rules.bombsBeatAnything ? { ...section, items: ANYTHING_BOMB_ITEMS } : section,
   );
   return (
     <div className="menu-body rules">
@@ -183,16 +221,20 @@ function Rules({ rules }: { rules: RuleOptions }) {
   );
 }
 
-function Segmented<T extends string>({
+// --- Settings rows -----------------------------------------------------------------------------
+
+export function Segmented<T extends string>({
   label,
   value,
   options,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: T;
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
+  disabled?: boolean;
 }) {
   const id = useId();
   return (
@@ -206,6 +248,7 @@ function Segmented<T extends string>({
             role="radio"
             aria-checked={o.value === value}
             className={o.value === value ? "on" : ""}
+            disabled={disabled}
             onClick={() => onChange(o.value)}
           >
             {o.label}
@@ -216,32 +259,68 @@ function Segmented<T extends string>({
   );
 }
 
-function SettingsTab({ settings, onSettings }: Pick<Props, "settings" | "onSettings">) {
-  const set = <K extends keyof Settings>(key: K, value: Settings[K]) => onSettings({ ...settings, [key]: value });
-  const onOff = [
-    { value: "on", label: "On" },
-    { value: "off", label: "Off" },
-  ];
+const ON_OFF = [
+  { value: "on", label: "On" },
+  { value: "off", label: "Off" },
+];
+
+export function BombRow({
+  anything,
+  onChange,
+  disabled,
+}: {
+  anything: boolean;
+  onChange: (anything: boolean) => void;
+  disabled?: boolean;
+}) {
   return (
-    <div className="menu-body">
-      <Segmented
-        label="Bombs beat"
-        value={settings.bombsBeatAnything ? "anything" : "twos"}
-        options={[
-          { value: "twos", label: "2s only" },
-          { value: "anything", label: "Anything" },
-        ]}
-        onChange={(v) => set("bombsBeatAnything", v === "anything")}
-      />
-      <Segmented<BotLevel>
-        label="Bots"
-        value={settings.botLevel}
-        options={[
-          { value: "easy", label: "Easy" },
-          { value: "normal", label: "Normal" },
-        ]}
-        onChange={(v) => set("botLevel", v)}
-      />
+    <Segmented
+      label="Bombs beat"
+      value={anything ? "anything" : "twos"}
+      options={[
+        { value: "twos", label: "2s only" },
+        { value: "anything", label: "Anything" },
+      ]}
+      onChange={(v) => onChange(v === "anything")}
+      disabled={disabled}
+    />
+  );
+}
+
+export function BotLevelRow({
+  level,
+  onChange,
+  disabled,
+}: {
+  level: BotLevel;
+  onChange: (level: BotLevel) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Segmented<BotLevel>
+      label="Bots"
+      value={level}
+      options={[
+        { value: "easy", label: "Easy" },
+        { value: "normal", label: "Normal" },
+      ]}
+      onChange={onChange}
+      disabled={disabled}
+    />
+  );
+}
+
+/** Settings that only change how this screen looks and feels. */
+export function PersonalRows({
+  settings,
+  onSettings,
+}: {
+  settings: Settings;
+  onSettings: (settings: Settings) => void;
+}) {
+  const set = <K extends keyof Settings>(key: K, value: Settings[K]) => onSettings({ ...settings, [key]: value });
+  return (
+    <>
       <Segmented<BotSpeed>
         label="Speed"
         value={settings.botSpeed}
@@ -255,16 +334,15 @@ function SettingsTab({ settings, onSettings }: Pick<Props, "settings" | "onSetti
       <Segmented
         label="Hint button"
         value={settings.hints ? "on" : "off"}
-        options={onOff}
+        options={ON_OFF}
         onChange={(v) => set("hints", v === "on")}
       />
       <Segmented
         label="Move log"
         value={settings.moveLog ? "on" : "off"}
-        options={onOff}
+        options={ON_OFF}
         onChange={(v) => set("moveLog", v === "on")}
       />
-      <p className="note">Saved on this device. Rule changes apply right away.</p>
-    </div>
+    </>
   );
 }

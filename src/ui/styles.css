@@ -30,7 +30,8 @@ button {
   color: inherit;
 }
 
-button:focus-visible {
+button:focus-visible,
+input:focus-visible {
   outline: 2px solid #000;
   outline-offset: 2px;
 }
@@ -377,6 +378,59 @@ button.card:focus-visible {
   flex-wrap: wrap;
 }
 
+/* Names and the colour picker */
+.nm {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.opp.active .nm {
+  background: #fff;
+  padding: 0 4px;
+}
+
+.profile {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-name input {
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: #fff;
+  color: #000;
+  font: inherit;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.swatch {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #000;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.swatch.on {
+  outline: 3px solid #000;
+  outline-offset: 2px;
+}
+
 /* Menu */
 .menu {
   padding: 0;
@@ -428,6 +482,58 @@ button.card:focus-visible {
 
 .menu-body p {
   margin: 0;
+}
+
+.code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.code-label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.code {
+  font-size: 1.4rem;
+  letter-spacing: 0.08em;
+  user-select: all;
+}
+
+.code-form {
+  display: flex;
+  gap: 8px;
+}
+
+.code-form input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: #fff;
+  color: #000;
+  font: inherit;
+  text-transform: uppercase;
+}
+
+.code-form input::placeholder {
+  color: var(--faint);
+  text-transform: none;
+}
+
+.code-form button:disabled {
+  border-color: var(--faint);
+  color: var(--faint);
+  cursor: not-allowed;
+}
+
+.deal-code {
+  margin: 0 0 8px;
 }
 
 .menu-actions {
@@ -484,6 +590,157 @@ button.card:focus-visible {
   line-height: 1.45;
 }
 
+/* Online: lobby, seat list, banners */
+.lobby {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 8px 0 4px;
+  overflow: auto;
+}
+
+.lobby p {
+  margin: 0;
+}
+
+.lobby button,
+.invite button {
+  min-height: 44px;
+  min-width: 64px;
+  padding: 0 16px;
+  border: 1px solid #000;
+  border-radius: 0;
+  background: #fff;
+  color: #000;
+  cursor: pointer;
+}
+
+.lobby button.primary {
+  background: #000;
+  color: #fff;
+}
+
+.lobby button:disabled {
+  border-color: var(--faint);
+  color: var(--faint);
+  cursor: not-allowed;
+}
+
+.lobby button.primary:disabled {
+  background: #fff;
+}
+
+.lobby button.link {
+  align-self: flex-start;
+  min-height: 36px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.message-title {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.invite {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.invite-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.invite .code-row {
+  align-items: flex-start;
+}
+
+.start {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #000;
+}
+
+.seats li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-bottom: 1px solid #000;
+}
+
+.seats li:last-child {
+  border-bottom: none;
+}
+
+.seats li.bot {
+  color: var(--muted);
+}
+
+.seats .who {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.seats li.bot .who {
+  font-weight: 400;
+}
+
+.seats .dot {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border: 1px solid #000;
+}
+
+.seats .tag {
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.banner,
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  max-width: calc(100% - 24px);
+  padding: 6px 12px;
+  background: #000;
+  color: #fff;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.banner {
+  top: 0;
+}
+
+.toast {
+  top: 44px;
+}
+
 @media (min-width: 700px) {
   :root {
     --small-w: 48px;
@@ -492,6 +749,35 @@ button.card:focus-visible {
 
   .hand {
     --card-w: min(80px, calc((100cqw - 8px) / 6.8));
+  }
+}
+
+@media (max-width: 699.98px) {
+  /* Phones: a square table with Bot Two just above it, the pair centred in the board.
+     Bot One and Three stay level with the table, so they sit exactly where they did. */
+  .board {
+    grid-template-rows: 1fr auto auto 1fr;
+    grid-template-areas:
+      ". . ."
+      "top top top"
+      "left center right"
+      ". . .";
+  }
+
+  .felt {
+    align-self: center;
+    aspect-ratio: 1 / 1;
+  }
+
+  /* One line per move, so a long play can't make the table grow and shift Bot Two. */
+  .ticker {
+    max-width: 100%;
+  }
+
+  .ticker li {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 }
 
