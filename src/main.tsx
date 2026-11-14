@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import "@fontsource/vt323/latin-400.css";
 import App from "./ui/App";
 import "./ui/styles.css";
 

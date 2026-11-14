@@ -16,6 +16,7 @@ import {
 } from "../engine";
 import { CardFace } from "./CardFace";
 import { Felt, GameOver, Opponent } from "./Board";
+import { Logo } from "./Logo";
 import { nameOf, possessiveOf, seatAt, usePlayers } from "./players";
 import type { Settings } from "./settings";
 
@@ -140,7 +141,7 @@ export function GameScreen({
   return (
     <div className="app">
       <header className="topbar">
-        <h1>VC_13</h1>
+        <Logo />
         {headerCenter && (
           <span className="topbar-center" data-testid="room-code">
             {headerCenter}

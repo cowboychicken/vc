@@ -1,6 +1,7 @@
 import { type ReactNode, useState } from "react";
 import { type Profile, type RoomInfo, formatRoomCode } from "../../net/protocol";
 import { GameScreen } from "../GameScreen";
+import { Logo } from "../Logo";
 import { BombRow, BotLevelRow, MenuDialog, type MenuTab, PersonalRows, RulesTab } from "../Menu";
 import { ProfileEditor } from "../ProfileEditor";
 import { PlayersContext, playersFromRoom } from "../players";
@@ -149,7 +150,7 @@ function Message({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="app">
       <header className="topbar">
-        <h1>VC_13</h1>
+        <Logo />
       </header>
       <main className="lobby">
         <h2 className="message-title">{title}</h2>

@@ -45,7 +45,7 @@ docs/         Rules, architecture, plan. Older exploratory docs are marked as su
 
 - UI defaults in `src/ui/settings.ts`: bot speed `fast` (the `normal` timing is gap 300 ms / think 480 ms), and the house rule **bombs beat anything** on. The engine's own `DEFAULT_RULES` stays `bombsBeatAnything: false`.
 - Look and feel: flat black and white, monospace, square corners, mobile first (phone layout under 700 px). No green felt.
-- Title is `VC_13`. Bots are `Bot One`, `Bot Two`, `Bot Three`.
+- Title is `VC13.gg` (shown in the header and tab, set in VT323). The repo and docs still say `VC_13`. Bots are `Bot One`, `Bot Two`, `Bot Three`.
 - Seeds and deal codes are not secret, and cheating prevention is not a goal. Online identity is only a local name and colour plus a per-room seat token. No logins.
 - Deployment target is `vc13.gg` on a home server behind a Cloudflare Tunnel and Traefik (see `docker-compose.yml`).
 

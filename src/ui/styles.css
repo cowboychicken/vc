@@ -54,10 +54,13 @@ input:focus-visible {
   border-bottom: 1px solid #000;
 }
 
-.topbar h1 {
-  font-size: 1rem;
-  letter-spacing: 0.05em;
+.logo {
   margin: 0;
+  font-family: "VT323", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 1.7rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  line-height: 1;
 }
 
 .topbar-center {
@@ -163,7 +166,7 @@ input:focus-visible {
   justify-content: center;
   gap: 10px;
   min-width: 0;
-  border: 1px solid #000;
+  border: 1px solid transparent;
   padding: 8px;
 }
 
@@ -393,7 +396,8 @@ button.card:focus-visible {
   overflow-wrap: anywhere;
 }
 
-.opp.active .nm {
+/* Only coloured names (inline style) get a white chip; plain names are already white on black. */
+.opp.active .nm[style] {
   background: #fff;
   padding: 0 4px;
 }
