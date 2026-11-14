@@ -13,7 +13,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  botSpeed: "fast",
+  botSpeed: "normal",
   botLevel: "normal",
   hints: true,
   moveLog: true,

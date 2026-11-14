@@ -48,14 +48,6 @@ export function MenuDialog({ tabs, onClose }: { tabs: MenuTab[]; onClose: () => 
   );
 }
 
-export function dealUrl(dealCode: string): string {
-  const url = new URL(window.location.href);
-  url.search = "";
-  url.hash = "";
-  url.searchParams.set("code", dealCode);
-  return url.toString();
-}
-
 export async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
@@ -90,14 +82,17 @@ export function LocalGameTab({ game, dealCode, onNewDeal, onSameDeal, onLoadDeal
     if (!code) return setNote("That isn't a room code. It has 6 letters and numbers.");
     if (inProgress && confirm !== "online") {
       setConfirm("online");
-      return setNote("This leaves your game. Tap Join again.");
+      return setNote("This ends your current game. Tap Join again.");
     }
     onOnline({ type: "join", code });
   };
 
   // Leaving a game in progress takes a second tap.
   const act = (kind: Confirm, run: () => void) => {
-    if (inProgress && confirm !== kind) return setConfirm(kind);
+    if (inProgress && confirm !== kind) {
+      setConfirm(kind);
+      return setNote("This ends your current game. Tap again to confirm.");
+    }
     run();
   };
   const copy = async (text: string, done: string) => {
@@ -112,62 +107,19 @@ export function LocalGameTab({ game, dealCode, onNewDeal, onSameDeal, onLoadDeal
 
   return (
     <div className="menu-body">
-      <div className="code-row">
-        <div>
-          <span className="code-label">Deal code</span>
-          <b className="code" data-testid="deal-code">
-            {dealCode}
-          </b>
-        </div>
-        <button type="button" onClick={() => copy(dealCode, "Code copied.")}>
-          Copy
-        </button>
-      </div>
-      <div className="menu-actions">
+      <div className="menu-pair">
         <button type="button" onClick={() => act("new", onNewDeal)}>
-          {confirm === "new" ? "Abandon game? Tap again" : "New deal"}
+          {confirm === "new" ? "Tap again" : "New deal"}
         </button>
         <button type="button" onClick={() => act("same", onSameDeal)}>
-          {confirm === "same" ? "Abandon game? Tap again" : "Restart this deal"}
-        </button>
-        <button type="button" onClick={() => copy(dealUrl(dealCode), "Link copied.")}>
-          Copy link to this deal
+          {confirm === "same" ? "Tap again" : "Replay deal"}
         </button>
       </div>
-      <form
-        className="code-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          loadEntered();
-        }}
-      >
-        <input
-          value={entered}
-          onChange={(e) => {
-            setEntered(e.target.value);
-            setConfirm(null);
-            setNote("");
-          }}
-          placeholder="Enter a deal code"
-          aria-label="Deal code to load"
-          maxLength={16}
-          autoCapitalize="characters"
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck={false}
-        />
-        <button type="submit" disabled={entered.trim() === ""}>
-          {confirm === "load" ? "Abandon game? Tap again" : "Play code"}
-        </button>
-      </form>
-      <p className="note" role="status">
-        {note || "\u00a0"}
-      </p>
       <div className="menu-section">
         <span className="code-label">Online, with friends</span>
         <div className="menu-actions">
           <button type="button" onClick={() => act("online", () => onOnline({ type: "create" }))}>
-            {confirm === "online" ? "Abandon game? Tap again" : "Play online"}
+            {confirm === "online" ? "Tap again" : "Play online"}
           </button>
         </div>
         <form
@@ -196,42 +148,86 @@ export function LocalGameTab({ game, dealCode, onNewDeal, onSameDeal, onLoadDeal
           </button>
         </form>
       </div>
+      <div className="menu-section">
+        <div className="code-row">
+          <span className="code-label">Deal code</span>
+          <button
+            type="button"
+            className="code"
+            data-testid="deal-code"
+            title="Copy deal code"
+            onClick={() => copy(dealCode, "Copied. Share it to replay this deal.")}
+          >
+            {dealCode}
+          </button>
+        </div>
+        <form
+          className="code-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            loadEntered();
+          }}
+        >
+          <input
+            value={entered}
+            onChange={(e) => {
+              setEntered(e.target.value);
+              setConfirm(null);
+              setNote("");
+            }}
+            placeholder="Paste a deal code"
+            aria-label="Deal code to load"
+            maxLength={16}
+            autoCapitalize="characters"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <button type="submit" disabled={entered.trim() === ""}>
+            {confirm === "load" ? "Tap again" : "Play"}
+          </button>
+        </form>
+      </div>
+      <p className="note" role="status">
+        {note || "\u00a0"}
+      </p>
     </div>
   );
 }
 
 // --- Rules -------------------------------------------------------------------------------------
 
-const RULES: { title: string; items: string[] }[] = [
+const RULES: { title: string; items: string[]; open?: boolean }[] = [
   {
-    title: "Goal",
-    items: ["4 players, 13 cards each. The first to play all their cards wins."],
-  },
-  {
-    title: "Card order",
-    items: ["Rank, low to high: 3 4 5 6 7 8 9 10 J Q K A 2.", "Suit, low to high: ♠ ♣ ♦ ♥."],
+    title: "Basics",
+    open: true,
+    items: [
+      "Be first to play all 13 of your cards.",
+      "Low to high: 3 4 5 6 7 8 9 10 J Q K A 2.",
+      "Suits, low to high: ♠ ♣ ♦ ♥.",
+    ],
   },
   {
     title: "Plays",
     items: [
       "Single, pair, triple, or four of a kind.",
       "Run: 3 or more in a row (no 2s).",
-      "Pair run: 3 or more consecutive pairs (no 2s).",
+      "Pair run: 3 or more pairs in a row (no 2s).",
     ],
   },
   {
     title: "Turns",
     items: [
-      "Beat the table with the same kind and size and a higher top card (rank, then suit).",
-      "Pass if you can't or won't. After you pass you're out until the table clears.",
-      "When everyone else has passed, the last player to play leads again, and can't pass while leading.",
-      "First game: the 3♠ holder leads and must play the 3♠. After that, the last winner leads anything.",
+      "Beat the table: same kind and size, higher top card (rank, then suit).",
+      "Pass if you can't or won't. You're out until the table clears.",
+      "If everyone else passes, you lead again.",
+      "First game: the 3♠ holder leads with it. After that, the last winner leads.",
     ],
   },
   {
-    title: "Chops",
+    title: "Bombs",
     items: [
-      "Bombs: 3-pair run < four of a kind < 4-pair run < 5-pair run.",
+      "Order: 3-pair run < four of a kind < 4-pair run < 5-pair run.",
       "Any bomb beats a single 2. Four of a kind or a 4+ pair run beats a pair of 2s. A 4+ pair run beats a triple of 2s.",
       "A bomb also beats a weaker bomb. Bombs can't be played on anything else.",
     ],
@@ -250,19 +246,19 @@ const ANYTHING_BOMB_ITEMS = [
 
 export function RulesTab({ rules }: { rules: RuleOptions }) {
   const sections = RULES.map((section) =>
-    section.title === "Chops" && rules.bombsBeatAnything ? { ...section, items: ANYTHING_BOMB_ITEMS } : section,
+    section.title === "Bombs" && rules.bombsBeatAnything ? { ...section, items: ANYTHING_BOMB_ITEMS } : section,
   );
   return (
     <div className="menu-body rules">
       {sections.map((section) => (
-        <section key={section.title}>
-          <h3>{section.title}</h3>
+        <details key={section.title} open={section.open}>
+          <summary>{section.title}</summary>
           <ul>
             {section.items.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
-        </section>
+        </details>
       ))}
     </div>
   );

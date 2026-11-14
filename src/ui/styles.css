@@ -514,10 +514,26 @@ button.card:focus-visible {
   color: var(--muted);
 }
 
-.code {
-  font-size: 1.4rem;
+.menu .code {
+  min-height: 0;
+  min-width: 0;
+  padding: 2px 6px;
+  border: none;
+  font-size: 0.9rem;
   letter-spacing: 0.08em;
-  user-select: all;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.menu .code:hover {
+  background: #000;
+  color: #fff;
+}
+
+.menu-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 .code-form {
@@ -590,18 +606,44 @@ button.card:focus-visible {
 }
 
 .rules {
-  gap: 12px;
+  gap: 0;
 }
 
-.rules h3 {
-  margin: 0 0 4px;
+.rules details {
+  border-bottom: 1px solid var(--faint);
+}
+
+.rules details:last-child {
+  border-bottom: none;
+}
+
+.rules summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
   font-size: 0.8rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+  cursor: pointer;
+  list-style: none;
+}
+
+.rules summary::-webkit-details-marker {
+  display: none;
+}
+
+.rules summary::after {
+  content: "+";
+  font-size: 1.1rem;
+}
+
+.rules details[open] summary::after {
+  content: "−";
 }
 
 .rules ul {
-  margin: 0;
+  margin: 0 0 12px;
   padding-left: 18px;
   font-size: 0.85rem;
   line-height: 1.45;
