@@ -22,13 +22,20 @@ Tap the **i** button for the menu: new or restarted deal, a link to the current 
 
 One Node process serves the app and the room API. Rooms live in memory (a restart ends any games in progress).
 
+For the intended `vc13.gg` deployment:
+
+1. Point the domain's registrar nameservers to Cloudflare and wait for the zone to become active.
+2. Add `vc13.gg` as a published hostname on the Cloudflare Tunnel, pointing to Traefik's reachable HTTP entrypoint.
+3. Check that the shared Docker network and Traefik entrypoint in `docker-compose.yml` match your server. Do not publish the app's port directly.
+4. Start the container, then check `https://vc13.gg/api/health` and create and join a room from another device.
+
 ```sh
 docker compose up -d --build   # see docker-compose.yml for the Traefik labels to adjust
 # or, without Docker:
-npm run build && PORT=3000 TRUST_PROXY=true npm start
+npm run build && PORT=3000 npm start
 ```
 
-`TRUST_PROXY=true` is only for running behind your own proxy (Cloudflare Tunnel, Traefik). Details, environment variables and hosting notes are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#8-build-and-deployment).
+`TRUST_PROXY=true` is only for running behind your own trusted proxy that supplies trustworthy client IP headers. The Compose file enables it for the intended setup. Details, environment variables and hosting notes are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#8-build-and-deployment).
 
 ## Docs
 

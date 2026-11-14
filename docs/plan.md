@@ -15,7 +15,7 @@
 - **Engine:** pure TypeScript, immutable state, seeded `mulberry32` shuffling, no UI, DOM or Node imports.
 - **UI:** React with Vite and plain CSS. Mobile-first, tap to select. Flat black-and-white look.
 - **Online:** a small Node relay server with **long polling**. The server owns the game and sends each seat only its own `PlayerView`; rooms are in memory; seats are claimed with a random token stored on the device. No WebSockets, accounts or database. Reasons and trade-offs are in [ARCHITECTURE.md](./ARCHITECTURE.md#10-decisions-and-trade-offs).
-- **Hosting:** one container (Docker) behind Traefik and a Cloudflare Tunnel on a home server, with Tailscale for SSH. The intended domain is vc13.com (not confirmed).
+- **Hosting:** one container (Docker) behind Traefik and a Cloudflare Tunnel on a home server, with Tailscale for SSH. The intended domain is vc13.gg.
 - **Tests:** Vitest, with no browser harness; UI behaviour is checked by hand in a real browser.
 - **Bots:** a `Bot` interface that receives only a `PlayerView` and the legal moves. A baseline heuristic bot and a random bot ship first.
 - **Deferred:** FastAPI, Gymnasium and PPO (see [Tech_Architecture.md](./Tech_Architecture.md), [AI_RL_Environment.md](./AI_RL_Environment.md), [API_Contracts.md](./API_Contracts.md)). If RL is wanted later, train in Python against a port of the engine and ship the policy through the existing `Bot` interface (for example as ONNX in the browser or on the server).

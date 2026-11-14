@@ -47,7 +47,7 @@ docs/         Rules, architecture, plan. Older exploratory docs are marked as su
 - Look and feel: flat black and white, monospace, square corners, mobile first (phone layout under 700 px). No green felt.
 - Title is `VC_13`. Bots are `Bot One`, `Bot Two`, `Bot Three`.
 - Seeds and deal codes are not secret, and cheating prevention is not a goal. Online identity is only a local name and colour plus a per-room seat token. No logins.
-- Deployment target is a home server behind a Cloudflare Tunnel and Traefik (see `docker-compose.yml`); the intended domain is `vc13.com` but that isn't confirmed.
+- Deployment target is `vc13.gg` on a home server behind a Cloudflare Tunnel and Traefik (see `docker-compose.yml`).
 
 ## Gotchas
 

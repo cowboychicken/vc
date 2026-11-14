@@ -18,7 +18,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=proxy # CHANGE: the network Traefik shares with this container
-      - traefik.http.routers.vc13.rule=Host(`vc13.com`) # CHANGE: your hostname
+      - traefik.http.routers.vc13.rule=Host(`vc13.gg`) # CHANGE: your hostname
       - traefik.http.routers.vc13.entrypoints=web # CHANGE: your HTTP entrypoint
       - traefik.http.services.vc13.loadbalancer.server.port=3000
     # To try it without Traefik, comment out `networks` and `labels` and publish the port instead:
