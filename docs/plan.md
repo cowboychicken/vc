@@ -27,7 +27,7 @@ src/
 ├── engine/        # Pure game logic: cards, combos, legal plays, game state, variant rules, deal codes
 ├── bots/          # Bot interface, heuristic and random bots, bot levels, playOut simulation helper
 ├── net/           # Shared by browser and server: wire protocol, presenter; browser-only fetch client
-├── ui/            # React UI: GameScreen (shared), LocalGame, online/ (OnlineApp, Lobby, useRoom), menu, board
+├── ui/            # React UI: GameScreen (shared), LocalGame, online/ (OnlineApp, useRoom), menu, board
 └── main.tsx
 server/            # Node: room manager, HTTP API + long poll, static files, production entry
 tests/             # Vitest: engine, game, bots, deal codes, session, protocol, rooms, HTTP, presenter
@@ -42,8 +42,8 @@ Dockerfile, docker-compose.yml
 4. **Bots.** Done: heuristic and random bots that only ever return a legal move.
 5. **UI.** Done: starts directly in a game, tap to select, play/pass/hint/clear, turn and error feedback, game-over dialog with *Play again* (the winner leads) and *Replay this deal* (same seed). The **i** menu has game actions, the rules, and settings stored in `localStorage`. Every deal has a short code (`XXXX-XXXX`) that can be copied, typed back in, or opened as `?code=`. Bots light up first and their card appears a beat later, and clicking anywhere but a card or button clears the selection. Bots are named Bot One, Bot Two and Bot Three.
 6. **Online multiplayer.** Done:
-   - Create a room or join by code or link (`?room=`), with a custom name and a colour from a contrast-checked palette.
-   - Lobby, then the host starts each game; the first game opens with the 3♠, later games are led by the last winner, and the host may supply a deal code.
+   - Create a room or join by code or link (`?room=`), with a name and a colour from a contrast-checked palette.
+   - One tap creates a room and deals at once (no lobby); friends who arrive take a bot's seat, even mid-game. Everyone gets a random funny name and colour, editable in the Online tab. The host starts each later game; the first game opens with the 3♠, later games are led by the last winner, and the host may supply a deal code.
    - The host sets the rules (between games) and the bot level; everyone sets their own speed, hints and move log.
    - A dropped or idle player is covered by a bot and resumes on return; the host role passes on if the host leaves or is away; a reload or a locked phone returns you to your seat.
    - The server runs the bots and is the referee; players only ever see their own hand.

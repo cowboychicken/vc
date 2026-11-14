@@ -1,5 +1,7 @@
 import { type ReactNode, useEffect, useId, useState } from "react";
 import { type Deal, type GameState, type RuleOptions, decodeDeal } from "../engine";
+import { normalizeRoomCode } from "../net/protocol";
+import type { OnlineIntent } from "./online/intent";
 import type { BotLevel, BotSpeed, Settings } from "./settings";
 
 export interface MenuTab {
@@ -65,7 +67,7 @@ export async function copyText(text: string): Promise<boolean> {
 
 // --- Single-player game tab ----------------------------------------------------------------------
 
-type Confirm = "new" | "same" | "load";
+type Confirm = "new" | "same" | "load" | "online";
 
 interface LocalGameTabProps {
   game: GameState;
@@ -73,13 +75,25 @@ interface LocalGameTabProps {
   onNewDeal: () => void;
   onSameDeal: () => void;
   onLoadDeal: (deal: Deal) => void;
+  onOnline: (intent: OnlineIntent) => void;
 }
 
-export function LocalGameTab({ game, dealCode, onNewDeal, onSameDeal, onLoadDeal }: LocalGameTabProps) {
+export function LocalGameTab({ game, dealCode, onNewDeal, onSameDeal, onLoadDeal, onOnline }: LocalGameTabProps) {
   const inProgress = game.winner === null && game.history.length > 0;
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [note, setNote] = useState("");
   const [entered, setEntered] = useState("");
+  const [roomCode, setRoomCode] = useState("");
+
+  const joinRoom = () => {
+    const code = normalizeRoomCode(roomCode);
+    if (!code) return setNote("That isn't a room code. It has 6 letters and numbers.");
+    if (inProgress && confirm !== "online") {
+      setConfirm("online");
+      return setNote("This leaves your game. Tap Join again.");
+    }
+    onOnline({ type: "join", code });
+  };
 
   // Leaving a game in progress takes a second tap.
   const act = (kind: Confirm, run: () => void) => {
@@ -149,6 +163,39 @@ export function LocalGameTab({ game, dealCode, onNewDeal, onSameDeal, onLoadDeal
       <p className="note" role="status">
         {note || "\u00a0"}
       </p>
+      <div className="menu-section">
+        <span className="code-label">Online, with friends</span>
+        <div className="menu-actions">
+          <button type="button" onClick={() => act("online", () => onOnline({ type: "create" }))}>
+            {confirm === "online" ? "Abandon game? Tap again" : "Play online"}
+          </button>
+        </div>
+        <form
+          className="code-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            joinRoom();
+          }}
+        >
+          <input
+            value={roomCode}
+            onChange={(e) => {
+              setRoomCode(e.target.value);
+              setNote("");
+            }}
+            placeholder="Room code to join"
+            aria-label="Room code to join"
+            maxLength={12}
+            autoCapitalize="characters"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          <button type="submit" disabled={roomCode.trim() === ""}>
+            Join
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

@@ -14,7 +14,7 @@ import {
 } from "../../net/client";
 import { type PresenterState, type Timing, initialPresenter, nextStep, presenterReducer } from "../../net/presenter";
 import type { JoinResponse, Profile, RoomInfo, UpdateResponse } from "../../net/protocol";
-import type { OnlineIntent } from "../OnlineTab";
+import type { OnlineIntent } from "./intent";
 import { setAddress } from "../url";
 import { forgetSeatToken, loadSeatToken, saveSeatToken } from "./seats";
 
@@ -47,12 +47,19 @@ export interface RoomHandle {
 // the second, so a room (or a seat) is never made twice.
 const joins = new WeakMap<OnlineIntent, Promise<JoinResponse>>();
 
+/** There is no lobby: a new room deals its first game at once, and friends who arrive take a bot's seat. */
+async function createAndDeal(profile: Profile, prefs: Prefs): Promise<JoinResponse> {
+  const created = await createRoom(profile, prefs);
+  const dealt = await startGame(created.room.code, created.token, -1);
+  return { ...dealt, token: created.token };
+}
+
 function joinOnce(intent: OnlineIntent, profile: Profile, prefs: Prefs): Promise<JoinResponse> {
   let promise = joins.get(intent);
   if (!promise) {
     promise =
       intent.type === "create"
-        ? createRoom(profile, prefs)
+        ? createAndDeal(profile, prefs)
         : joinRoom(intent.code, profile, loadSeatToken(intent.code));
     joins.set(intent, promise);
   }

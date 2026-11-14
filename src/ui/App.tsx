@@ -1,9 +1,7 @@
 import { useState } from "react";
-import { cleanName } from "../net/protocol";
 import { LocalGame } from "./LocalGame";
-import type { OnlineIntent } from "./OnlineTab";
-import { NamePrompt } from "./online/NamePrompt";
 import { OnlineApp } from "./online/OnlineApp";
+import type { OnlineIntent } from "./online/intent";
 import { loadProfile, saveProfile } from "./profile";
 import { type Settings, loadSettings, saveSettings } from "./settings";
 import { roomFromUrl, setAddress } from "./url";
@@ -19,6 +17,7 @@ const attempt = (intent: OnlineIntent): Online => ({ intent, attempt: ++attempts
 
 export default function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
+  // A first visit gets a funny name and a colour, so joining never asks for anything.
   const [profile, setProfile] = useState(loadProfile);
   // An invite link (?room=CODE) opens straight into that room.
   const [online, setOnline] = useState<Online | null>(() => {
@@ -30,20 +29,10 @@ export default function App() {
     setSettings(next);
     saveSettings(next);
   };
-  const updateProfile = (next: typeof profile) => {
-    setProfile(next);
-    saveProfile(next);
-  };
   const goOffline = () => {
     setAddress("");
     setOnline(null);
   };
-
-  if (online && cleanName(profile.name) === "" && online.intent.type === "join") {
-    return (
-      <NamePrompt code={online.intent.code} profile={profile} onJoin={updateProfile} onCancel={goOffline} />
-    );
-  }
 
   if (online) {
     return (
@@ -53,20 +42,15 @@ export default function App() {
         settings={settings}
         onSettings={updateSettings}
         profile={profile}
-        onProfile={updateProfile}
+        onProfile={(next) => {
+          setProfile(next);
+          saveProfile(next);
+        }}
         onLeave={goOffline}
         onRetry={() => setOnline(attempt(online.intent))}
       />
     );
   }
 
-  return (
-    <LocalGame
-      settings={settings}
-      onSettings={updateSettings}
-      profile={profile}
-      onProfile={updateProfile}
-      onOnline={(intent) => setOnline(attempt(intent))}
-    />
-  );
+  return <LocalGame settings={settings} onSettings={updateSettings} onOnline={(intent) => setOnline(attempt(intent))} />;
 }

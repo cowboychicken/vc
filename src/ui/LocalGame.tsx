@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { type GameState, encodeDeal, viewFor } from "../engine";
-import type { Profile } from "../net/protocol";
 import { GameScreen } from "./GameScreen";
 import { LocalGameTab, MenuDialog, type MenuTab, BombRow, BotLevelRow, PersonalRows, RulesTab } from "./Menu";
-import { OnlineTab, type OnlineIntent } from "./OnlineTab";
+import type { OnlineIntent } from "./online/intent";
 import { LOCAL_PLAYERS, PlayersContext } from "./players";
 import { HUMAN, initSession, isTurnShown, reduceSession } from "./session";
 import { BOT_BY_LEVEL, BOT_TIMING, type Settings, rulesFromSettings } from "./settings";
@@ -12,13 +11,11 @@ import { randomSeed, startingOptions } from "./url";
 interface Props {
   settings: Settings;
   onSettings: (settings: Settings) => void;
-  profile: Profile;
-  onProfile: (profile: Profile) => void;
   onOnline: (intent: OnlineIntent) => void;
 }
 
 /** Single player: you at the bottom, three bots, everything running in this browser. */
-export function LocalGame({ settings, onSettings, profile, onProfile, onOnline }: Props) {
+export function LocalGame({ settings, onSettings, onOnline }: Props) {
   const [session, dispatch] = useReducer(reduceSession, undefined, () =>
     initSession({ ...startingOptions(), rules: rulesFromSettings(settings) }),
   );
@@ -68,17 +65,7 @@ export function LocalGame({ settings, onSettings, profile, onProfile, onOnline }
             dispatch({ type: "load", deal });
             closeMenu();
           }}
-        />
-      ),
-    },
-    {
-      id: "online",
-      label: "Online",
-      content: (
-        <OnlineTab
-          profile={profile}
-          onProfile={onProfile}
-          onStart={(intent) => {
+          onOnline={(intent) => {
             closeMenu();
             onOnline(intent);
           }}

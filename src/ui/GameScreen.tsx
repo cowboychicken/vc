@@ -33,6 +33,8 @@ interface Props {
   dealCode: string | null;
   onMove: (move: Move) => void;
   onOpenMenu: () => void;
+  /** Shown in the middle of the header, like an online room's code. */
+  headerCenter?: ReactNode;
   /** What the player can do once the game is over. */
   gameOverActions: ReactNode;
   /** Dialogs drawn over the game. */
@@ -47,6 +49,7 @@ export function GameScreen({
   dealCode,
   onMove,
   onOpenMenu,
+  headerCenter,
   gameOverActions,
   children,
 }: Props) {
@@ -138,6 +141,11 @@ export function GameScreen({
     <div className="app">
       <header className="topbar">
         <h1>VC_13</h1>
+        {headerCenter && (
+          <span className="topbar-center" data-testid="room-code">
+            {headerCenter}
+          </span>
+        )}
         <div className="meta">
           <span data-testid="record">{record}</span>
           <button

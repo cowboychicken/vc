@@ -1,13 +1,12 @@
 import { type ReactNode, useState } from "react";
-import { type Profile, type RoomInfo, cleanName } from "../../net/protocol";
+import { type Profile, type RoomInfo, formatRoomCode } from "../../net/protocol";
 import { GameScreen } from "../GameScreen";
 import { BombRow, BotLevelRow, MenuDialog, type MenuTab, PersonalRows, RulesTab } from "../Menu";
-import type { OnlineIntent } from "../OnlineTab";
 import { ProfileEditor } from "../ProfileEditor";
 import { PlayersContext, playersFromRoom } from "../players";
 import { BOT_TIMING, type Settings, rulesFromSettings } from "../settings";
-import { Lobby } from "./Lobby";
-import { InviteRow, SeatList } from "./parts";
+import type { OnlineIntent } from "./intent";
+import { InviteRow, SeatList, StartControls } from "./parts";
 import { type RoomHandle, useRoom } from "./useRoom";
 
 interface Props {
@@ -51,7 +50,7 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
     );
   }
 
-  if (!room || seat === null) {
+  if (!room || seat === null || presenter.shown === null) {
     return (
       <Message title={intent.type === "create" ? "Making your room…" : "Joining the room…"}>
         <div className="dialog-actions">
@@ -66,7 +65,22 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
   const players = playersFromRoom(room, seat);
   const closeMenu = () => setMenuOpen(false);
   const tabs: MenuTab[] = [
-    { id: "room", label: "Room", content: <RoomTab room={room} seat={seat} onLeave={leave} /> },
+    {
+      id: "online",
+      label: "Online",
+      content: (
+        <OnlineTab
+          room={room}
+          seat={seat}
+          profile={profile}
+          onProfile={(next) => {
+            onProfile(next);
+            handle.setProfile(next);
+          }}
+          onLeave={leave}
+        />
+      ),
+    },
     { id: "rules", label: "Rules", content: <RulesTab rules={room.settings.rules} /> },
     {
       id: "settings",
@@ -76,8 +90,6 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
           room={room}
           seat={seat}
           handle={handle}
-          profile={profile}
-          onProfile={onProfile}
           settings={settings}
           onSettings={onSettings}
         />
@@ -85,9 +97,9 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
     },
   ];
   const menu = menuOpen && <MenuDialog tabs={tabs} onClose={closeMenu} />;
+  const shown = presenter.shown;
   const isHost = room.host === seat;
   const hostName = room.seats[room.host]?.name ?? "the host";
-  const shown = presenter.shown;
 
   return (
     <PlayersContext.Provider value={players}>
@@ -101,41 +113,34 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
           {handle.notice}
         </div>
       )}
-      {shown === null ? (
-        <Lobby room={room} seat={seat} onStart={handle.start} onOpenMenu={() => setMenuOpen(true)} onLeave={leave}>
-          {menu}
-        </Lobby>
-      ) : (
-        <GameScreen
-          view={shown.view}
-          turnShown={presenter.lit}
-          settings={settings}
-          record={`Won ${room.wins[seat] ?? 0} of ${room.games}`}
-          dealCode={room.dealCode}
-          onMove={handle.move}
-          onOpenMenu={() => setMenuOpen(true)}
-          gameOverActions={
-            room.phase !== "over" ? (
-              <p role="status">Starting…</p>
-            ) : isHost ? (
-              <>
-                <button type="button" className="primary" onClick={() => handle.start()} autoFocus>
-                  Start next game
-                </button>
-                <button type="button" onClick={() => handle.start(room.dealCode ?? undefined)}>
-                  Replay this deal
-                </button>
-              </>
-            ) : (
-              <p role="status" data-testid="waiting">
-                Waiting for {hostName} to start the next game…
-              </p>
-            )
-          }
-        >
-          {menu}
-        </GameScreen>
-      )}
+      <GameScreen
+        view={shown.view}
+        turnShown={presenter.lit}
+        settings={settings}
+        record={`Won ${room.wins[seat] ?? 0} of ${room.games}`}
+        dealCode={room.dealCode}
+        onMove={handle.move}
+        onOpenMenu={() => setMenuOpen(true)}
+        headerCenter={formatRoomCode(room.code)}
+        gameOverActions={
+          room.phase !== "over" ? (
+            <p role="status">Starting…</p>
+          ) : isHost ? (
+            <>
+              <StartControls label="Start next game" onStart={handle.start} />
+              <button type="button" onClick={() => handle.start(room.dealCode ?? undefined)}>
+                Replay this deal
+              </button>
+            </>
+          ) : (
+            <p role="status" data-testid="waiting">
+              Waiting for {hostName} to start the next game…
+            </p>
+          )
+        }
+      >
+        {menu}
+      </GameScreen>
     </PlayersContext.Provider>
   );
 }
@@ -154,9 +159,22 @@ function Message({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function RoomTab({ room, seat, onLeave }: { room: RoomInfo; seat: number; onLeave: () => void }) {
+function OnlineTab({
+  room,
+  seat,
+  profile,
+  onProfile,
+  onLeave,
+}: {
+  room: RoomInfo;
+  seat: number;
+  profile: Profile;
+  onProfile: (profile: Profile) => void;
+  onLeave: () => void;
+}) {
   return (
     <div className="menu-body">
+      <ProfileEditor profile={profile} onSubmit={onProfile} />
       <InviteRow code={room.code} />
       <SeatList room={room} me={seat} />
       <div className="menu-actions">
@@ -172,40 +190,20 @@ function SettingsTab({
   room,
   seat,
   handle,
-  profile,
-  onProfile,
   settings,
   onSettings,
 }: {
   room: RoomInfo;
   seat: number;
   handle: RoomHandle;
-  profile: Profile;
-  onProfile: (profile: Profile) => void;
   settings: Settings;
   onSettings: (settings: Settings) => void;
 }) {
-  const [draft, setDraft] = useState(profile);
   const isHost = room.host === seat;
   const playing = room.phase === "playing";
-  const changed = draft.color !== profile.color || cleanName(draft.name) !== profile.name;
-  const usable = cleanName(draft.name) !== "";
-
-  const update = () => {
-    const next = { name: cleanName(draft.name), color: draft.color };
-    onProfile(next);
-    handle.setProfile(next);
-  };
 
   return (
     <div className="menu-body">
-      <ProfileEditor profile={draft} onChange={setDraft} />
-      <div className="menu-actions">
-        <button type="button" onClick={update} disabled={!changed || !usable}>
-          Update my name and colour
-        </button>
-      </div>
-
       <BombRow
         anything={room.settings.rules.bombsBeatAnything}
         onChange={(bombsBeatAnything) => handle.setSettings({ rules: { ...room.settings.rules, bombsBeatAnything } })}

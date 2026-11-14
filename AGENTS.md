@@ -26,7 +26,7 @@ src/net/      Code shared by browser and server: protocol.ts (wire types, valida
               room codes), presenter.ts (frame playback, pure), client.ts (fetch wrapper, browser only).
 server/       Node: rooms.ts (all room logic), app.ts (HTTP routes + long poll), static.ts, limits.ts, index.ts.
 src/ui/       React. GameScreen (one seat-agnostic screen), LocalGame (single player),
-              online/ (OnlineApp, Lobby, useRoom hook), Menu, Board, settings/profile/url helpers.
+              online/ (OnlineApp, useRoom hook), Menu, Board, settings/profile/url helpers.
 tests/        Vitest. Mirrors the layers: engine, game, bots, dealCode, session, protocol, rooms, http, presenter.
 docs/         Rules, architecture, plan. Older exploratory docs are marked as such.
 ```

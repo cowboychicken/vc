@@ -4,29 +4,21 @@ import { type RoomInfo, colorHex, formatRoomCode } from "../../net/protocol";
 import { copyText } from "../Menu";
 import { roomUrl } from "../url";
 
-/** The room code, and ways to hand it to a friend. */
+/** Ways to hand the room to a friend. The code itself is shown in the header. */
 export function InviteRow({ code }: { code: string }) {
   const [note, setNote] = useState("");
   const copy = async (text: string, done: string) =>
-    setNote((await copyText(text)) ? done : "Could not copy. Select the code instead.");
+    setNote((await copyText(text)) ? done : "Could not copy. Select the code in the header instead.");
 
   return (
     <div className="invite">
-      <div className="code-row">
-        <div>
-          <span className="code-label">Room code</span>
-          <b className="code" data-testid="room-code">
-            {formatRoomCode(code)}
-          </b>
-        </div>
-        <div className="invite-buttons">
-          <button type="button" onClick={() => copy(roomUrl(code), "Invite link copied.")}>
-            Copy link
-          </button>
-          <button type="button" onClick={() => copy(formatRoomCode(code), "Code copied.")}>
-            Copy code
-          </button>
-        </div>
+      <div className="invite-buttons">
+        <button type="button" onClick={() => copy(roomUrl(code), "Invite link copied.")}>
+          Copy invite link
+        </button>
+        <button type="button" onClick={() => copy(formatRoomCode(code), "Code copied.")}>
+          Copy code
+        </button>
       </div>
       <p className="note" role="status">
         {note || "\u00a0"}
@@ -58,12 +50,7 @@ export function SeatList({ room, me }: { room: RoomInfo; me: number }) {
   );
 }
 
-export function settingsSummary({ settings }: RoomInfo): string {
-  const bombs = settings.rules.bombsBeatAnything ? "bombs beat anything" : "bombs beat 2s only";
-  return `${bombs} · ${settings.botLevel} bots`;
-}
-
-/** The host's start button, with room to replay a deal code. */
+/** The host's start button, with room to play a deal code. */
 export function StartControls({ label, onStart }: { label: string; onStart: (dealCode?: string) => void }) {
   const [entered, setEntered] = useState("");
   const [note, setNote] = useState("");

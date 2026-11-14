@@ -1,27 +1,41 @@
-import { PALETTE, type Profile, MAX_NAME_LENGTH } from "../net/protocol";
+import { useState } from "react";
+import { MAX_NAME_LENGTH, PALETTE, type Profile, cleanName } from "../net/protocol";
 
 interface Props {
   profile: Profile;
-  onChange: (profile: Profile) => void;
-  /** Shown under the fields. */
-  note?: string;
+  /** Called with the new profile: straight away for a colour, on submit for a name. */
+  onSubmit: (profile: Profile) => void;
 }
 
-export function ProfileEditor({ profile, onChange, note }: Props) {
+/** Name (saved with its button) and colour (saved as soon as it is picked). */
+export function ProfileEditor({ profile, onSubmit }: Props) {
+  const [name, setName] = useState(profile.name);
+  const cleaned = cleanName(name);
+  const changed = cleaned !== "" && cleaned !== profile.name;
+
   return (
-    <div className="profile">
-      <label className="profile-name">
-        <span className="code-label">Your name</span>
+    <form
+      className="profile"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (changed) onSubmit({ ...profile, name: cleaned });
+      }}
+    >
+      <div className="code-form">
         <input
-          value={profile.name}
-          onChange={(e) => onChange({ ...profile, name: e.target.value })}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          aria-label="Your name"
           placeholder="Name"
           maxLength={MAX_NAME_LENGTH}
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
         />
-      </label>
+        <button type="submit" disabled={!changed}>
+          Save
+        </button>
+      </div>
       <div role="radiogroup" aria-label="Name colour" className="swatches">
         {PALETTE.map((c) => (
           <button
@@ -32,11 +46,10 @@ export function ProfileEditor({ profile, onChange, note }: Props) {
             aria-label={c.id}
             className={`swatch${profile.color === c.id ? " on" : ""}`}
             style={{ background: c.hex }}
-            onClick={() => onChange({ ...profile, color: c.id })}
+            onClick={() => onSubmit({ ...profile, color: c.id })}
           />
         ))}
       </div>
-      {note && <p className="note">{note}</p>}
-    </div>
+    </form>
   );
 }
