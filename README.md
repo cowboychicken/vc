@@ -25,9 +25,11 @@ One Node process serves the app and the room API. Rooms live in memory (a restar
 For the intended `vc13.gg` deployment:
 
 1. Point the domain's registrar nameservers to Cloudflare and wait for the zone to become active.
-2. Add `vc13.gg` as a published hostname on the Cloudflare Tunnel, pointing to Traefik's reachable HTTP entrypoint.
+2. Add `vc13.gg` and `www.vc13.gg` as published hostnames on the Cloudflare Tunnel, pointing to Traefik's reachable HTTP entrypoint.
 3. Check that the shared Docker network and Traefik entrypoint in `docker-compose.yml` match your server. Do not publish the app's port directly.
-4. Start the container, then check `https://vc13.gg/api/health` and create and join a room from another device.
+4. Start the container, then check `/api/health` on both hostnames and create and join a room from another device.
+
+The two hostnames have separate browser storage, so settings and saved room seats are not shared between them.
 
 ```sh
 docker compose up -d --build   # see docker-compose.yml for the Traefik labels to adjust
