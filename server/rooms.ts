@@ -91,6 +91,7 @@ interface Room {
   games: number;
   wins: number[];
   participants: Participant[];
+  kickedTokens: Set<string>;
   gameParticipants: Set<number>;
   lastWinner: number | null;
   game: GameState | null;
@@ -171,6 +172,7 @@ export class RoomManager {
       games: 0,
       wins: new Array<number>(NUM_SEATS).fill(0),
       participants,
+      kickedTokens: new Set(),
       gameParticipants: new Set(),
       lastWinner: null,
       game: null,
@@ -187,6 +189,9 @@ export class RoomManager {
     const room = this.room(code);
     const now = this.now();
     room.lastActive = now;
+    if (token && room.kickedTokens.has(token)) {
+      throw new RoomError(403, "forbidden", "The host removed you from this room.");
+    }
     const existing = token ? this.seatOf(room, token) : -1;
     if (existing >= 0) {
       const seat = room.seats[existing]!;
@@ -224,6 +229,15 @@ export class RoomManager {
     return { token: newToken };
   }
 
+  /** Picks a random room with a present human and a bot seat, or returns null. */
+  randomJoinableRoom(): string | null {
+    const candidates = [...this.rooms.values()].filter((room) =>
+      room.seats.some((seat) => seat.kind === "human" && !this.isAway(seat)) &&
+      room.seats.some((seat) => seat.kind === "bot"),
+    );
+    return candidates.length > 0 ? candidates[this.rand(candidates.length)]!.code : null;
+  }
+
   leave(code: string, token: string): void {
     const room = this.room(code);
     const seat = this.auth(room, token);
@@ -234,6 +248,25 @@ export class RoomManager {
       return;
     }
     if (room.host === seat) room.host = this.firstHuman(room, true);
+    this.advanceBots(room);
+    this.touch(room);
+  }
+
+  kick(code: string, token: string, targetSeat: number): void {
+    const room = this.room(code);
+    const host = this.auth(room, token);
+    this.requireHost(room, host);
+    if (!Number.isInteger(targetSeat) || targetSeat < 0 || targetSeat >= NUM_SEATS) {
+      throw new RoomError(400, "bad_request", "That seat is invalid.");
+    }
+    if (targetSeat === host || room.seats[targetSeat]!.kind !== "human") {
+      throw new RoomError(409, "conflict", "That seat can't be removed.");
+    }
+
+    const target = room.seats[targetSeat]!;
+    if (target.token) room.kickedTokens.add(target.token);
+    room.seats[targetSeat] = this.botSeat(targetSeat, this.now());
+    if (room.phase === "playing") room.gameParticipants.add(room.seats[targetSeat]!.playerId);
     this.advanceBots(room);
     this.touch(room);
   }

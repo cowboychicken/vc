@@ -1,6 +1,6 @@
 # VC_13: guide for developers and AI agents
 
-A small browser card game: Tiến Lên (Miền Nam rules), 4 seats, played alone against bots or online with up to 4 friends. React + Vite + TypeScript, plus a tiny Node server for online rooms. No accounts, no database.
+A small browser card game: Tiến Lên (Miền Nam rules), 4 seats, played online with up to 4 people and bots in open seats. The public flow is multiplayer Quick Play or room invites; local single-player code remains hidden for now. React + Vite + TypeScript, plus a tiny Node server for online rooms. No accounts, no database.
 
 Read this first. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the detail behind it, and [docs/VC_Game_Rules.md](docs/VC_Game_Rules.md) has the rules.
 
@@ -25,7 +25,7 @@ src/bots/     Bots. They see only a PlayerView and the legal moves.
 src/net/      Code shared by browser and server: protocol.ts (wire types, validators, names, colours,
               room codes), presenter.ts (frame playback, pure), client.ts (fetch wrapper, browser only).
 server/       Node: rooms.ts (all room logic), app.ts (HTTP routes + long poll), static.ts, limits.ts, index.ts.
-src/ui/       React. GameScreen (one seat-agnostic screen), LocalGame (single player),
+src/ui/       React. LandingPage, GameScreen (one seat-agnostic screen), LocalGame (single player),
               online/ (OnlineApp, useRoom hook), Menu, Board, settings/profile/url helpers.
 tests/        Vitest. Mirrors the layers: engine, game, bots, dealCode, session, protocol, rooms, http, presenter.
 docs/         Rules, architecture, plan. Older exploratory docs are marked as such.
@@ -45,7 +45,7 @@ docs/         Rules, architecture, plan. Older exploratory docs are marked as su
 
 - UI defaults in `src/ui/settings.ts`: bot speed `normal` (gap 300 ms / think 480 ms), and the house rule **bombs beat anything** on. The engine's own `DEFAULT_RULES` stays `bombsBeatAnything: false`.
 - Look and feel: flat black and white, monospace, square corners, mobile first (phone layout under 700 px). No green felt.
-- Title is `VC13.gg` (shown in the header and tab, set in VT323). The repo and docs still say `VC_13`. Bots are `Bot One`, `Bot Two`, `Bot Three`.
+- Header logo is `VC13.gg` (set in VT323); the tab title includes Tiến Lên Miền Nam for search. The repo and docs still say `VC_13`. Bots are `Bot One`, `Bot Two`, `Bot Three`.
 - Seeds and deal codes are not secret, and cheating prevention is not a goal. Online identity is only a local name and colour plus a per-room seat token. No logins.
 - Deployment target is `vc13.gg` on a home server behind a Cloudflare Tunnel and Traefik (see `docker-compose.yml`).
 

@@ -41,6 +41,7 @@ interface Props {
   onMove: (move: Move) => void;
   onOpenMenu: () => void;
   onOpenRules: () => void;
+  onToggleDarkMode?: () => void;
   /** Shown in the middle of the header, like an online room's code. */
   headerCenter?: ReactNode;
   /** What the player can do once the game is over. */
@@ -62,6 +63,7 @@ export function GameScreen({
   onMove,
   onOpenMenu,
   onOpenRules,
+  onToggleDarkMode,
   headerCenter,
   gameOverActions,
   children,
@@ -178,7 +180,7 @@ export function GameScreen({
   return (
     <div className="app">
       <header className="topbar">
-        <Logo />
+        <Logo onToggleDarkMode={onToggleDarkMode} />
         {headerCenter && (
           <span className="topbar-center" data-testid="room-code">
             {headerCenter}

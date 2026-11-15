@@ -4,12 +4,14 @@ import {
   type CreateRoomRequest,
   type ErrorBody,
   type ErrorCode,
+  type KickRequest,
   type JoinResponse,
   type JoinRoomRequest,
   type MoveRequest,
   PROTOCOL_VERSION,
   type Profile,
   type ProfileRequest,
+  type QuickplayResponse,
   type RoomInfo,
   type SettingsRequest,
   type StartRequest,
@@ -65,6 +67,9 @@ const room = (code: string, action = "") => `/api/rooms/${code}${action ? `/${ac
 export const createRoom = (profile: Profile, prefs: { rules: RuleOptions; botLevel: BotLevel }) =>
   request<JoinResponse>("POST", "/api/rooms", { body: { ...profile, ...prefs } satisfies CreateRoomRequest });
 
+export const quickplayRoom = (profile: Profile, prefs: { rules: RuleOptions; botLevel: BotLevel }) =>
+  request<QuickplayResponse>("POST", "/api/rooms/quickplay", { body: { ...profile, ...prefs } satisfies CreateRoomRequest });
+
 export const peekRoom = (code: string) => request<RoomInfo>("GET", room(code));
 
 export const joinRoom = (code: string, profile: Profile, token?: string) =>
@@ -92,6 +97,9 @@ export const sendSettings = (
 
 export const sendProfile = (code: string, token: string, since: number, profile: Profile) =>
   request<UpdateResponse>("POST", room(code, "profile"), { token, body: { since, ...profile } satisfies ProfileRequest });
+
+export const kickRoomPlayer = (code: string, token: string, seat: number, since: number) =>
+  request<UpdateResponse>("POST", room(code, "kick"), { token, body: { seat, since } satisfies KickRequest });
 
 export const leaveRoom = (code: string, token: string) =>
   request<{ ok: true }>("POST", room(code, "leave"), { token, body: {} });

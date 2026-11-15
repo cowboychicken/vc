@@ -5,8 +5,10 @@ import {
   ApiError,
   createRoom,
   getUpdates,
+  kickRoomPlayer,
   joinRoom,
   leaveRoom,
+  quickplayRoom,
   sendMove,
   sendProfile,
   sendSettings,
@@ -42,13 +44,15 @@ export interface RoomHandle {
   start: () => void;
   setSettings: (patch: { rules?: RuleOptions; botLevel?: BotLevel }) => void;
   setProfile: (profile: Profile) => void;
+  kick: (seat: number) => void;
   /** Gives up the seat and stops polling. Resolves once the server has been told. */
   leave: () => Promise<void>;
 }
 
 // React runs effects twice in development. Whatever the first run asks of the server is shared with
 // the second, so a room (or a seat) is never made twice.
-const joins = new WeakMap<OnlineIntent, Promise<JoinResponse>>();
+type JoinResult = JoinResponse & { created?: boolean };
+const joins = new WeakMap<OnlineIntent, Promise<JoinResult>>();
 
 /** There is no lobby: a new room deals its first game at once, and friends who arrive take a bot's seat. */
 async function createAndDeal(profile: Profile, prefs: Prefs): Promise<JoinResponse> {
@@ -57,13 +61,15 @@ async function createAndDeal(profile: Profile, prefs: Prefs): Promise<JoinRespon
   return { ...dealt, token: created.token };
 }
 
-function joinOnce(intent: OnlineIntent, profile: Profile, prefs: Prefs): Promise<JoinResponse> {
+function joinOnce(intent: OnlineIntent, profile: Profile, prefs: Prefs): Promise<JoinResult> {
   let promise = joins.get(intent);
   if (!promise) {
     promise =
       intent.type === "create"
         ? createAndDeal(profile, prefs)
-        : joinRoom(intent.code, profile, loadSeatToken(intent.code));
+        : intent.type === "quickplay"
+          ? quickplayRoom(profile, prefs)
+          : joinRoom(intent.code, profile, loadSeatToken(intent.code));
     joins.set(intent, promise);
   }
   return promise;
@@ -143,10 +149,11 @@ export function useRoom(intent: OnlineIntent, profile: Profile, prefs: Prefs, ti
       since.current = -1;
       dispatch({ type: "reset" });
 
-      let joined: JoinResponse;
+      let joined: JoinResult;
       try {
         joined = await joinOnce(intent, latest.current.profile, latest.current.prefs);
       } catch (e) {
+        if (e instanceof ApiError && e.status === 403 && intent.type === "join") forgetSeatToken(intent.code);
         if (!cancelled) fail(e instanceof ApiError ? e.message : "Couldn't join the room.");
         return;
       }
@@ -157,8 +164,8 @@ export function useRoom(intent: OnlineIntent, profile: Profile, prefs: Prefs, ti
       joinedCode.current = roomCode;
       setCode(roomCode);
       saveSeatToken(roomCode, joined.token);
-      if (intent.type === "create") setAddress(`?room=${roomCode}`);
-      apply(joined, intent.type === "create");
+      setAddress(`?room=${roomCode}`);
+      apply(joined, intent.type === "create" || (intent.type === "quickplay" && joined.created === true));
       setStatus("connected");
 
       let failures = 0;
@@ -199,7 +206,7 @@ export function useRoom(intent: OnlineIntent, profile: Profile, prefs: Prefs, ti
               apply(again);
               continue;
             } catch (e) {
-              if (e instanceof ApiError && e.status === 404) forgetSeatToken(roomCode);
+              if (e instanceof ApiError && (e.status === 403 || e.status === 404)) forgetSeatToken(roomCode);
               return fail(e instanceof ApiError ? e.message : "Couldn't rejoin the room. Check your connection and try again.");
             }
           }
@@ -250,6 +257,7 @@ export function useRoom(intent: OnlineIntent, profile: Profile, prefs: Prefs, ti
     start: () => void act((c, t, s) => startGame(c, t, s)),
     setSettings: (patch) => void act((c, t, s) => sendSettings(c, t, s, patch)),
     setProfile: (next) => void act((c, t, s) => sendProfile(c, t, s, next)),
+    kick: (seat) => void act((c, t, s) => kickRoomPlayer(c, t, seat, s)),
     leave: async () => {
       leaving.current = true;
       poll.current?.abort();

@@ -2,7 +2,7 @@ import type { BotLevel } from "../bots";
 import { DECK_SIZE, type Move, type PlayerView, type RuleOptions } from "../engine";
 
 /** Bump when the wire format or game rules change in a way an old page can't cope with. */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 export const VERSION_HEADER = "x-vc13-version";
 
 export const NUM_SEATS = 4;
@@ -142,6 +142,10 @@ export interface JoinResponse extends UpdateResponse {
   token: string;
 }
 
+export interface QuickplayResponse extends JoinResponse {
+  created: boolean;
+}
+
 export interface Profile {
   name: string;
   color: ColorId;
@@ -155,6 +159,10 @@ export interface CreateRoomRequest extends Profile {
 export interface JoinRoomRequest extends Profile {
   /** Token from an earlier visit, to reclaim a seat or return with the same room stats. */
   token?: string;
+}
+export interface KickRequest {
+  seat: number;
+  since: number;
 }
 export interface SinceRequest {
   since: number;

@@ -3,6 +3,8 @@ import {
   type ErrorBody,
   type ErrorCode,
   type JoinResponse,
+  type QuickplayResponse,
+  NUM_SEATS,
   PROTOCOL_VERSION,
   VERSION_HEADER,
   normalizeRoomCode,
@@ -183,6 +185,14 @@ export function createApi(options: ApiOptions = {}): Api {
         manager.setProfile(code, token, profile);
         break;
       }
+      case "kick": {
+        const seat = body.seat;
+        if (typeof seat !== "number" || !Number.isInteger(seat) || seat < 0 || seat >= NUM_SEATS) {
+          throw new RoomError(400, "bad_request", "That seat is invalid.");
+        }
+        manager.kick(code, token, seat);
+        break;
+      }
       case "leave": {
         manager.leave(code, token);
         return send(res, 200, { ok: true });
@@ -220,6 +230,31 @@ export function createApi(options: ApiOptions = {}): Api {
         const { code, token } = manager.create(profile, { rules, botLevel });
         const created: JoinResponse = { ...manager.update(code, token, -1), token };
         send(res, 200, created);
+        return true;
+      }
+
+      if (parts.length === 2 && parts[1] === "quickplay") {
+        if (req.method !== "POST") throw new RoomError(404, "not_found", "Not found.");
+        const body = await readJson(req);
+        const profile = parseProfile(body);
+        if (!profile) throw new RoomError(400, "bad_request", "Pick a name and a colour.");
+        const rules = body.rules === undefined ? undefined : (parseRules(body.rules) ?? undefined);
+        const botLevel = body.botLevel === undefined ? undefined : (parseBotLevel(body.botLevel) ?? undefined);
+        const since = parseSince(body.since);
+        const match = manager.randomJoinableRoom();
+        let response: QuickplayResponse;
+        if (match) {
+          const { token } = manager.join(match, profile);
+          response = { ...manager.update(match, token, since), token, created: false };
+        } else {
+          if (!creates.hit(clientAddress(req))) {
+            throw new RoomError(429, "rate_limited", "You've created a lot of rooms. Wait a bit and try again.");
+          }
+          const { code, token } = manager.create(profile, { rules, botLevel });
+          manager.start(code, token);
+          response = { ...manager.update(code, token, since), token, created: true };
+        }
+        send(res, 200, response);
         return true;
       }
 

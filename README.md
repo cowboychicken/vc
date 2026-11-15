@@ -1,6 +1,6 @@
 # VC_13
 
-A light browser game: quick Tiến Lên (Miền Nam rules) against three bots, or online with up to three friends. No sign-up, no database.
+A free browser game of Tiến Lên Miền Nam (Tien Len), the Vietnamese 13-card game also known as Thirteen. Quick Play matches you with other people; create a room to invite friends. No sign-up, no database.
 
 ```sh
 npm install
@@ -12,13 +12,15 @@ npm start          # serve the built app and the room API on http://localhost:30
 
 ## Playing
 
+The landing page offers **Quick Play**, **Create Room**, and **Join Room** by code. Quick Play joins a random room with a present player and an open bot seat; if none is available, it creates and starts a room. Create Room starts a new game and gives you a code to share. Bots fill open seats in multiplayer games.
+
 Tap **?** for the rules (tap outside the box to close it), and **i** for the menu: new or restarted deal, the deal code, and settings (bombs beat 2s only or anything, bot level and speed, hint button, move log; saved in `localStorage`).
 
 Cards are dealt around the table before a short opening message. The move log shows up to five recent moves when there is room.
 
 **Deal codes.** Every deal has a short code like `0000-0727`, shown when the game ends. Tap it to copy it. Save it, or paste it into the menu's deal code box, to replay the same cards and the same starting player. The code is also a link: `?code=0000-0727`. A mistyped code is rejected rather than loading a different deal. House rules and bot settings are not part of a code. The long form `?seed=123&leader=0..3` still works.
 
-**Online.** Menu → Game → **Play online** makes a room in one tap and deals straight away; the room code is shown at the top of the screen. Tap the room code (header or Online tab) to copy it, and friends type it into the "Room code to join" box to drop in (a `?room=ABC234` link also works). Everyone gets a random funny name and colour (change yours any time in the **Online** tab: colour saves as you pick it, a name saves with its button). Empty seats are played by bots, up to 4 people can join (even mid-game), and a player who drops out is covered by a bot until they come back. The host chooses the rules and starts each game, and the previous winner leads the next one. Online deals are always random: there is no replaying a deal or entering a deal code in a room. Your seat is remembered on your device, so reloading or locking your phone puts you back where you were.
+**Online.** The room code is shown at the top of the screen. Tap the room code (header or Online tab) to copy it, and friends can enter it on the landing page or open a `?room=ABC234` link to drop in. A joiner takes the next bot seat, even mid-game. The host can kick another human; that seat becomes a bot and the kicked player's saved seat token is rejected. Everyone gets a random funny name and colour (change yours any time in the **Online** tab: colour saves as you pick it, a name saves with its button). A player who drops out is covered by a bot until they come back. The host chooses the rules and starts each game, and the previous winner leads the next one. Online deals are always random: there is no replaying a deal or entering a deal code in a room. Your seat is remembered on your device, so reloading or locking your phone puts you back where you were.
 
 Tap or hover over your **Won** record online to see each participant's wins, games and win rate for that room. A completed game counts for everyone who occupied a seat during it; a win goes to whoever occupied the winning seat at the end, including a player covered by a bot while away. Stats survive leaving and returning on the same device while its room token is saved, but disappear when the room closes or the server restarts.
 
@@ -32,6 +34,8 @@ For the intended `vc13.gg` deployment:
 2. Add `vc13.gg` and `www.vc13.gg` as published hostnames on the Cloudflare Tunnel, pointing to Traefik's reachable HTTP entrypoint.
 3. Check that the shared Docker network and Traefik entrypoint in `docker-compose.yml` match your server. Do not publish the app's port directly.
 4. Start the container, then check `/api/health` on both hostnames and create and join a room from another device.
+
+The public landing page describes the game for search engines and AI crawlers. `robots.txt` and `sitemap.xml` are served from the site root.
 
 The two hostnames have separate browser storage, so settings and saved room seats are not shared between them.
 

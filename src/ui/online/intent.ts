@@ -1,1 +1,1 @@
-export type OnlineIntent = { type: "create" } | { type: "join"; code: string };
+export type OnlineIntent = { type: "create" } | { type: "quickplay" } | { type: "join"; code: string };

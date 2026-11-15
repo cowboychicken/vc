@@ -116,6 +116,34 @@ describe("room API", () => {
     expect(joined.body!.room.seats[1]!.name).toBe("Bo");
   });
 
+  it("quickplays into an open room or creates a new running room when none is joinable", async () => {
+    const h = await start();
+    try {
+      const quickplay = () => call<JoinResponse & { created: boolean }>(h.base, "POST", "/api/rooms/quickplay", { body: ann });
+      const first = await quickplay();
+      expect(first.status).toBe(200);
+      expect(first.body!.created).toBe(true);
+      expect(first.body!.seat).toBe(0);
+      expect(["playing", "over"]).toContain(first.body!.room.phase);
+
+      const matched = await quickplay();
+      expect(matched.body!.created).toBe(false);
+      expect(matched.body!.room.code).toBe(first.body!.room.code);
+      expect(matched.body!.seat).toBe(1);
+
+      const code = first.body!.room.code;
+      for (const profile of [{ name: "Cy", color: "green" }, { name: "Di", color: "pink" }]) {
+        expect((await call(h.base, "POST", `/api/rooms/${code}/join`, { body: profile })).status).toBe(200);
+      }
+      const fallback = await quickplay();
+      expect(fallback.body!.created).toBe(true);
+      expect(fallback.body!.room.code).not.toBe(code);
+      expect(fallback.body!.seat).toBe(0);
+    } finally {
+      await h.close();
+    }
+  });
+
   it("keeps a returning player's room identity without exposing their token", async () => {
     const { code, token } = await create();
     const joined = (await call<JoinResponse>(h.base, "POST", `/api/rooms/${code}/join`, { body: bo })).body!;
@@ -174,6 +202,26 @@ describe("room API", () => {
     expect(set.body!.room.settings).toEqual({ rules: { bombsBeatAnything: true }, botLevel: "easy" });
     const bad = await call(h.base, "POST", `/api/rooms/${code}/settings`, { token, body: { rules: { bombsBeatAnything: "yes" } } });
     expect(bad.status).toBe(400);
+  });
+
+  it("lets a host kick another human and prevents their saved token from rejoining", async () => {
+    const { code, token } = await create();
+    const guest = (await call<JoinResponse>(h.base, "POST", `/api/rooms/${code}/join`, { body: bo })).body!;
+    const forbidden = await call(h.base, "POST", `/api/rooms/${code}/kick`, {
+      token: guest.token,
+      body: { seat: guest.seat, since: -1 },
+    });
+    expect(forbidden.status).toBe(403);
+
+    const kicked = await call<UpdateResponse>(h.base, "POST", `/api/rooms/${code}/kick`, {
+      token,
+      body: { seat: guest.seat, since: -1 },
+    });
+    expect(kicked.status).toBe(200);
+    expect(kicked.body!.room.seats[guest.seat]).toMatchObject({ kind: "bot" });
+    expect((await call(h.base, "GET", `/api/rooms/${code}/updates?since=-1&rev=0`, { token: guest.token })).status).toBe(401);
+    expect((await call(h.base, "POST", `/api/rooms/${code}/join`, { body: { ...bo, token: guest.token } })).status).toBe(403);
+    expect((await call(h.base, "POST", `/api/rooms/${code}/join`, { body: bo })).status).toBe(200);
   });
 
   it("plays a whole game over the wire, one request per move", async () => {
@@ -314,6 +362,7 @@ describe("static files", () => {
     mkdirSync(join(dir, "assets"));
     writeFileSync(join(dir, "index.html"), "<!doctype html><title>VC</title>");
     writeFileSync(join(dir, "assets", "app-abc123.js"), "console.log(1)");
+    writeFileSync(join(dir, "sitemap.xml"), "<urlset />");
     writeFileSync(join(dir, "..", "vc13-secret.txt"), "secret");
     h = await start({}, dir);
   });
@@ -339,6 +388,13 @@ describe("static files", () => {
     expect(r.headers.get("content-type")).toContain("text/javascript");
     expect(r.headers.get("cache-control")).toContain("immutable");
     expect(r.headers.get("x-content-type-options")).toBe("nosniff");
+  });
+
+  it("serves sitemap XML with an XML content type", async () => {
+    const r = await call(h.base, "GET", "/sitemap.xml", { version: null });
+    expect(r.status).toBe(200);
+    expect(r.headers.get("content-type")).toContain("application/xml");
+    expect(r.text).toBe("<urlset />");
   });
 
   it("404s a missing file with an extension, and supports HEAD", async () => {

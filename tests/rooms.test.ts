@@ -106,6 +106,22 @@ describe("creating and joining", () => {
     expectError(() => manager.update(code, "", -1), 401);
   });
 
+  it("finds a random room only when a present human and an open bot seat exist", () => {
+    const { manager, clock } = setup({ awayMs: 10_000 });
+    expect(manager.randomJoinableRoom()).toBeNull();
+    const { code } = manager.create(ann);
+    expect(manager.randomJoinableRoom()).toBe(code);
+
+    manager.join(code, bo);
+    manager.join(code, { name: "Cy", color: "green" });
+    manager.join(code, { name: "Di", color: "pink" });
+    expect(manager.randomJoinableRoom()).toBeNull();
+
+    clock.t += 20_000;
+    expect(manager.randomJoinableRoom()).toBeNull();
+    expect(manager.peek(code)).not.toBeNull();
+  });
+
   it("caps the number of rooms", () => {
     const { manager } = setup({ maxRooms: 2 });
     manager.create(ann);
@@ -129,7 +145,7 @@ describe("starting a game", () => {
     const { code, token } = manager.create(ann);
     const guest = manager.join(code, bo);
     expectError(() => manager.start(code, guest.token), 403);
-    manager.start(code, token);
+    manager.start(code, token, encodeDeal({ seed: HOST_OPENS }));
     expectError(() => manager.start(code, token), 409);
   });
 
@@ -380,6 +396,30 @@ describe("leaving", () => {
     const { seat, frames } = manager.update(code, late.token, -1);
     expect(seat).toBe(1);
     expect(frames[frames.length - 1]!.view.hand).toHaveLength(13);
+  });
+
+  it("lets the host kick a player, covers their seat with a bot, and rejects their saved token", () => {
+    const { manager } = setup();
+    const { code, token } = manager.create(ann);
+    const guest = manager.join(code, bo);
+    manager.kick(code, token, 1);
+    const room = manager.update(code, token, -1).room;
+    expect(room.seats[1]).toMatchObject({ kind: "bot", name: "Bot One" });
+    expectError(() => manager.update(code, guest.token, -1), 401);
+    expectError(() => manager.join(code, bo, guest.token), 403);
+
+    const returned = manager.join(code, bo);
+    expect(manager.update(code, returned.token, -1).seat).toBe(1);
+  });
+
+  it("only lets the host kick another human seat", () => {
+    const { manager } = setup();
+    const { code, token } = manager.create(ann);
+    const guest = manager.join(code, bo);
+    expectError(() => manager.kick(code, guest.token, 0), 403);
+    expectError(() => manager.kick(code, token, 0), 409);
+    expectError(() => manager.kick(code, token, 2), 409);
+    expectError(() => manager.kick(code, token, 4), 400);
   });
 });
 

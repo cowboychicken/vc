@@ -16,17 +16,18 @@ import { type RoomHandle, useRoom } from "./useRoom";
 interface Props {
   intent: OnlineIntent;
   settings: Settings;
+  onToggleDarkMode: () => void;
   onSettings: (settings: Settings) => void;
   profile: Profile;
   onProfile: (profile: Profile) => void;
-  /** Back to the single-player game. */
+  /** Back to the landing page. */
   onLeave: () => void;
   /** Starts over with a fresh attempt at the same thing. */
   onRetry: () => void;
 }
 
 /** A room played over the network. The server runs the game; this screen shows what it is told. */
-export function OnlineApp({ intent, settings, onSettings, profile, onProfile, onLeave, onRetry }: Props) {
+export function OnlineApp({ intent, settings, onToggleDarkMode, onSettings, profile, onProfile, onLeave, onRetry }: Props) {
   // Only used to seed a new room, so later changes to these settings must not matter.
   const [prefs] = useState(() => ({ rules: rulesFromSettings(settings), botLevel: settings.botLevel }));
   const handle = useRoom(intent, profile, prefs, BOT_TIMING[settings.botSpeed]);
@@ -41,15 +42,13 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
 
   if (status === "failed") {
     return (
-      <Message title="Couldn't join the room">
+      <Message title="Multiplayer unavailable" onToggleDarkMode={onToggleDarkMode}>
         <p>{handle.error}</p>
         <div className="dialog-actions">
           <button type="button" className="primary" onClick={onRetry}>
             Try again
           </button>
-          <button type="button" onClick={onLeave}>
-            Play offline
-          </button>
+          <button type="button" onClick={onLeave}>Back to menu</button>
         </div>
       </Message>
     );
@@ -57,7 +56,16 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
 
   if (!room || seat === null || presenter.shown === null) {
     return (
-      <Message title={intent.type === "create" ? "Making your room…" : "Joining the room…"}>
+      <Message
+        onToggleDarkMode={onToggleDarkMode}
+        title={
+          intent.type === "create"
+            ? "Making your room…"
+            : intent.type === "quickplay"
+              ? "Finding a multiplayer game…"
+              : "Joining the room…"
+        }
+      >
         <div className="dialog-actions">
           <button type="button" onClick={onLeave}>
             Cancel
@@ -68,6 +76,7 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
   }
 
   const players = playersFromRoom(room, seat);
+  const isHost = room.host === seat;
   const closeMenu = () => setMenuOpen(false);
   const tabs: MenuTab[] = [
     {
@@ -78,10 +87,12 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
           room={room}
           seat={seat}
           profile={profile}
+          isHost={isHost}
           onProfile={(next) => {
             onProfile(next);
             handle.setProfile(next);
           }}
+          onKick={handle.kick}
           onLeave={leave}
         />
       ),
@@ -102,12 +113,11 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
   ];
   const menu = menuOpen && <MenuDialog tabs={tabs} onClose={closeMenu} />;
   const shown = presenter.shown;
-  const isHost = room.host === seat;
   const hostName = room.seats[room.host]?.name ?? "the host";
   const myId = room.seats[seat]!.playerId;
   const myStats = room.playerStats.find((player) => player.id === myId);
   if (!myStats) {
-    return <Message title="Couldn't load player stats"><p>Reload the page to try again.</p></Message>;
+    return <Message title="Couldn't load player stats" onToggleDarkMode={onToggleDarkMode}><p>Reload the page to try again.</p></Message>;
   }
   const record = `Won ${myStats.wins} of ${myStats.games}`;
 
@@ -133,6 +143,7 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
         reducedMotion={handle.reducedMotion}
         playbackPending={presenter.pending.length > 0}
         dealCode={room.dealCode}
+        onToggleDarkMode={onToggleDarkMode}
         onMove={handle.move}
         onOpenMenu={() => setMenuOpen(true)}
         onOpenRules={() => setRulesOpen(true)}
@@ -158,11 +169,19 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
   );
 }
 
-function Message({ title, children }: { title: string; children: ReactNode }) {
+function Message({
+  title,
+  children,
+  onToggleDarkMode,
+}: {
+  title: string;
+  children: ReactNode;
+  onToggleDarkMode?: () => void;
+}) {
   return (
     <div className="app">
       <header className="topbar">
-        <Logo />
+        <Logo onToggleDarkMode={onToggleDarkMode} />
       </header>
       <main className="lobby">
         <h2 className="message-title">{title}</h2>
@@ -176,13 +195,17 @@ function OnlineTab({
   room,
   seat,
   profile,
+  isHost,
   onProfile,
+  onKick,
   onLeave,
 }: {
   room: RoomInfo;
   seat: number;
   profile: Profile;
+  isHost: boolean;
   onProfile: (profile: Profile) => void;
+  onKick: (seat: number) => void;
   onLeave: () => void;
 }) {
   return (
@@ -192,7 +215,7 @@ function OnlineTab({
         <CopyCode text={formatRoomCode(room.code)} label="Room code" className="room-code-big" testId="menu-room-code" />
       </div>
       <ProfileEditor profile={profile} onSubmit={onProfile} />
-      <SeatList room={room} me={seat} />
+      <SeatList room={room} me={seat} onKick={isHost ? onKick : undefined} />
       <div className="menu-actions">
         <button type="button" onClick={onLeave}>
           Leave room
