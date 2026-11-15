@@ -142,7 +142,7 @@ export class RoomManager {
     this.newToken = options.randomToken ?? (() => randomBytes(16).toString("hex"));
     this.maxRooms = options.maxRooms ?? 200;
     this.awayMs = options.awayMs ?? 45_000;
-    this.turnMs = options.turnMs ?? 15_000;
+    this.turnMs = options.turnMs ?? 25_000;
     this.turnGraceMs = options.turnGraceMs ?? 4_000;
     this.maxStrikes = options.maxStrikes ?? 3;
     this.emptyRoomMs = options.emptyRoomMs ?? 30 * 60_000;

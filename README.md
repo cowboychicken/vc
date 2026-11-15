@@ -20,7 +20,7 @@ The room code is shown in the header and **Online** tab; tap it to copy. Friends
 
 Online deals are random. The deal code shown at the end is for reference; the public app does not load or replay deals. Deal-code parsing and local single-player components remain in the source but are not exposed in the current app flow.
 
-**Turn timer.** You have about 15 seconds to move, plus a few extra while earlier moves play out. The countdown appears next to the status line only for the last 10 seconds. If time runs out, a bot plays that move for you and you get a strike. On your third strike in a room you lose your seat to a bot and can't take it back (the room says so if you try); leaving the room resets your strikes. If you were the only person in the room, the room is deleted. Players who are away are already covered by a bot and get no strikes.
+**Turn timer.** You have about 25 seconds to move, plus a few extra while earlier moves play out. The countdown appears next to the status line only for the last 10 seconds. If time runs out, a bot plays that move for you and you get a strike. On your third strike in a room you lose your seat to a bot and can't take it back (the room says so if you try); leaving the room resets your strikes. If you were the only person in the room, the room is deleted. Players who are away are already covered by a bot and get no strikes.
 
 Dark mode is in **Settings**; tapping the logo three times quickly also toggles it. The smiley appears after the logo has been hovered or focused for three seconds.
 
