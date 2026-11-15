@@ -22,6 +22,7 @@ import {
   ROOM_ALPHABET,
   ROOM_CODE_LENGTH,
   type RoomInfo,
+  type SavedRoomToken,
   type UpdateResponse,
   botName,
   uniqueName,
@@ -43,7 +44,7 @@ export interface ManagerOptions {
   randomInt?: (max: number) => number;
   randomToken?: () => string;
   maxRooms?: number;
-  /** How long a human can go unheard before a bot covers their turns. */
+  /** How long a human can go unheard before their seat is released. */
   awayMs?: number;
   /** How long a present human has to move before a bot plays for them. */
   turnMs?: number;
@@ -51,8 +52,6 @@ export interface ManagerOptions {
   turnGraceMs?: number;
   /** Timeouts in one seat's stay in a room before the seat is taken away. */
   maxStrikes?: number;
-  /** How long a room with nobody around is kept. */
-  emptyRoomMs?: number;
   /** Frames kept per room, and the most sent in one response. */
   keepFrames?: number;
   maxFramesPerResponse?: number;
@@ -65,8 +64,6 @@ interface Seat {
   color: ColorId | null;
   token: string | null;
   lastSeen: number;
-  /** The away flag clients were last told about. */
-  shownAway: boolean;
   /** Turns this player let run out in this stay. A bot seat's are always 0; leaving or being replaced resets them. */
   strikes: number;
 }
@@ -109,7 +106,6 @@ interface Room {
   dealCode: string | null;
   frames: StoredFrame[];
   nextN: number;
-  lastActive: number;
 }
 
 const MAX_BOT_MOVES = 1000;
@@ -132,7 +128,6 @@ export class RoomManager {
   private readonly turnMs: number;
   private readonly turnGraceMs: number;
   private readonly maxStrikes: number;
-  private readonly emptyRoomMs: number;
   private readonly keepFrames: number;
   private readonly maxFramesPerResponse: number;
 
@@ -141,11 +136,10 @@ export class RoomManager {
     this.rand = options.randomInt ?? ((max) => randomInt(max));
     this.newToken = options.randomToken ?? (() => randomBytes(16).toString("hex"));
     this.maxRooms = options.maxRooms ?? 200;
-    this.awayMs = options.awayMs ?? 45_000;
+    this.awayMs = options.awayMs ?? 5_000;
     this.turnMs = options.turnMs ?? 25_000;
     this.turnGraceMs = options.turnGraceMs ?? 4_000;
     this.maxStrikes = options.maxStrikes ?? 3;
-    this.emptyRoomMs = options.emptyRoomMs ?? 30 * 60_000;
     this.keepFrames = options.keepFrames ?? 40;
     this.maxFramesPerResponse = options.maxFramesPerResponse ?? 12;
   }
@@ -176,7 +170,7 @@ export class RoomManager {
     }));
     participants.push({ id: NUM_SEATS, kind: "human", name: "", token, games: 0, wins: 0 });
     const seats: Seat[] = Array.from({ length: NUM_SEATS }, (_, i) => this.botSeat(i, now));
-    seats[0] = { kind: "human", playerId: NUM_SEATS, name: this.nameFor(profile.name, seats, 0), color: profile.color, token, lastSeen: now, shownAway: false, strikes: 0 };
+    seats[0] = { kind: "human", playerId: NUM_SEATS, name: this.nameFor(profile.name, seats, 0), color: profile.color, token, lastSeen: now, strikes: 0 };
     participants[NUM_SEATS]!.name = seats[0].name;
     this.rooms.set(code, {
       code,
@@ -197,7 +191,6 @@ export class RoomManager {
       dealCode: null,
       frames: [],
       nextN: 0,
-      lastActive: now,
     });
     return { code, token };
   }
@@ -206,7 +199,6 @@ export class RoomManager {
   join(code: string, profile: Profile, token?: string): { token: string } {
     const room = this.room(code);
     const now = this.now();
-    room.lastActive = now;
     const removed = token ? room.kickedTokens.get(token) : undefined;
     if (removed) {
       throw new RoomError(
@@ -224,7 +216,6 @@ export class RoomManager {
       seat.name = this.nameFor(profile.name, room.seats, existing);
       seat.color = profile.color;
       room.participants[seat.playerId]!.name = seat.name;
-      this.refreshAway(room);
       this.touch(room);
       return { token: seat.token! };
     }
@@ -246,7 +237,6 @@ export class RoomManager {
       color: profile.color,
       token: newToken,
       lastSeen: now,
-      shownAway: false,
       strikes: 0,
     };
     participant.name = room.seats[free]!.name;
@@ -255,20 +245,21 @@ export class RoomManager {
     return { token: newToken };
   }
 
-  /** Picks a random room with a present human and a bot seat, or returns null. */
-  randomJoinableRoom(): string | null {
-    const candidates = [...this.rooms.values()].filter((room) =>
-      room.seats.some((seat) => seat.kind === "human" && !this.isAway(seat)) &&
-      room.seats.some((seat) => seat.kind === "bot"),
-    );
+  /** Picks a random room with a present human and an available or reclaimable seat. */
+  randomJoinableRoom(saved: readonly SavedRoomToken[] = []): string | null {
+    const candidates = [...this.rooms.values()].filter((room) => {
+      const token = saved.find((entry) => entry.code === room.code)?.token;
+      return !room.kickedTokens.has(token ?? "") &&
+        room.seats.some((seat) => seat.kind === "human" && !this.isAway(seat)) &&
+        (room.seats.some((seat) => seat.kind === "bot") || (token !== undefined && this.seatOf(room, token) >= 0));
+    });
     return candidates.length > 0 ? candidates[this.rand(candidates.length)]!.code : null;
   }
 
   leave(code: string, token: string): void {
     const room = this.room(code);
     const seat = this.auth(room, token);
-    room.seats[seat] = this.botSeat(seat, this.now());
-    if (room.phase === "playing") room.gameParticipants.add(room.seats[seat]!.playerId);
+    this.releaseSeat(room, seat, this.now());
     if (!room.seats.some((s) => s.kind === "human")) {
       this.deleteRoom(room);
       return;
@@ -378,8 +369,6 @@ export class RoomManager {
     const seat = this.auth(room, token);
     const now = this.now();
     room.seats[seat]!.lastSeen = now;
-    room.lastActive = now;
-    if (this.refreshAway(room)) this.touch(room);
     return this.response(room, seat, since);
   }
 
@@ -395,8 +384,6 @@ export class RoomManager {
     const seat = this.auth(room, token);
     const now = this.now();
     room.seats[seat]!.lastSeen = now;
-    room.lastActive = now;
-    if (this.refreshAway(room)) this.touch(room);
   }
 
   /** True if the seat's client is out of date and a long poll should answer straight away. */
@@ -419,29 +406,27 @@ export class RoomManager {
     };
   }
 
-  /** Housekeeping for the clock: absent players, host handover, covering bots, expired rooms. */
+  /** Housekeeping for disconnected players and turn deadlines. */
   sweep(): string[] {
     const changed: string[] = [];
     const now = this.now();
     for (const room of [...this.rooms.values()]) {
-      let dirty = this.refreshAway(room);
-      if (this.isAway(room.seats[room.host]!)) {
-        const next = this.firstHuman(room, true);
-        if (next !== room.host && !this.isAway(room.seats[next]!)) {
-          room.host = next;
+      let dirty = false;
+      for (let seat = 0; seat < room.seats.length; seat++) {
+        if (this.isAway(room.seats[seat]!)) {
+          this.releaseSeat(room, seat, now);
           dirty = true;
         }
       }
-      // Bots cover away players first, so only a present human's turn can time out.
-      if (this.advanceBots(room)) dirty = true;
-      if (this.expireTurn(room)) dirty = true;
-      if (!this.rooms.has(room.code)) {
+      if (!room.seats.some((s) => s.kind === "human")) {
+        this.deleteRoom(room);
         changed.push(room.code);
         continue;
       }
-      const anyonePresent = room.seats.some((s) => s.kind === "human" && !this.isAway(s));
-      if (!anyonePresent && now - room.lastActive > this.emptyRoomMs) {
-        this.deleteRoom(room);
+      if (room.seats[room.host]!.kind !== "human") room.host = this.firstHuman(room, true);
+      if (this.advanceBots(room)) dirty = true;
+      if (this.expireTurn(room)) dirty = true;
+      if (!this.rooms.has(room.code)) {
         changed.push(room.code);
         continue;
       }
@@ -468,7 +453,6 @@ export class RoomManager {
   private auth(room: Room, token: string): number {
     const seat = token ? this.seatOf(room, token) : -1;
     if (seat < 0) throw new RoomError(401, "unauthorized", "You are no longer in this room.");
-    room.lastActive = this.now(); // only a player acting counts as activity, never the server's own housekeeping
     return seat;
   }
 
@@ -477,7 +461,12 @@ export class RoomManager {
   }
 
   private botSeat(index: number, now: number): Seat {
-    return { kind: "bot", playerId: index, name: botName(index), color: null, token: null, lastSeen: now, shownAway: false, strikes: 0 };
+    return { kind: "bot", playerId: index, name: botName(index), color: null, token: null, lastSeen: now, strikes: 0 };
+  }
+
+  private releaseSeat(room: Room, index: number, now: number): void {
+    room.seats[index] = this.botSeat(index, now);
+    if (room.phase === "playing") room.gameParticipants.add(room.seats[index]!.playerId);
   }
 
   private nameFor(wanted: string, seats: readonly Seat[], self: number): string {
@@ -487,20 +476,7 @@ export class RoomManager {
   }
 
   private isAway(seat: Seat): boolean {
-    return seat.kind === "human" && this.now() - seat.lastSeen > this.awayMs;
-  }
-
-  /** Brings each seat's published away flag up to date. Returns true if any changed. */
-  private refreshAway(room: Room): boolean {
-    let changed = false;
-    for (const seat of room.seats) {
-      const away = this.isAway(seat);
-      if (seat.shownAway !== away) {
-        seat.shownAway = away;
-        changed = true;
-      }
-    }
-    return changed;
+    return seat.kind === "human" && this.now() - seat.lastSeen >= this.awayMs;
   }
 
   /** The first human seat, preferring those who are around. */
@@ -537,7 +513,7 @@ export class RoomManager {
     for (let i = 0; i < MAX_BOT_MOVES && room.phase === "playing" && room.game && room.game.winner === null; i++) {
       const game = room.game;
       const seat = room.seats[game.turn]!;
-      if (seat.kind === "human" && !this.isAway(seat)) break;
+      if (seat.kind === "human") break;
       const rng = makeRng(game.seed * 31 + game.history.length);
       this.apply(room, game.turn, true, applyMove(game, botMove(game, BOT_BY_LEVEL[room.botLevel], rng)));
       moved = true;
@@ -546,7 +522,7 @@ export class RoomManager {
     return moved;
   }
 
-  /** Starts the clock when a present human becomes the one to move, and stops it otherwise. */
+  /** Starts the clock when a human becomes the one to move, and stops it otherwise. */
   private armTurn(room: Room): void {
     const game = room.game;
     if (room.phase !== "playing" || !game || game.winner !== null) {
@@ -554,7 +530,7 @@ export class RoomManager {
       return;
     }
     const seat = room.seats[game.turn]!;
-    if (seat.kind !== "human" || this.isAway(seat)) {
+    if (seat.kind !== "human") {
       room.turn = null;
       return;
     }
@@ -570,7 +546,7 @@ export class RoomManager {
     const turn = room.turn;
     if (!turn || this.now() < turn.deadline || room.phase !== "playing" || !room.game) return false;
     const seat = room.seats[turn.seat]!;
-    if (seat.kind !== "human" || this.isAway(seat)) {
+    if (seat.kind !== "human") {
       room.turn = null;
       return false;
     }
@@ -619,7 +595,7 @@ export class RoomManager {
         playerId: s.playerId,
         name: s.name,
         color: s.color,
-        away: s.shownAway,
+        away: false,
         host: i === room.host,
         strikes: s.strikes,
       })),

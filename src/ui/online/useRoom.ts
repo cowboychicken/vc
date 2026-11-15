@@ -15,11 +15,11 @@ import {
   startGame,
 } from "../../net/client";
 import { type PresenterState, type Timing, initialPresenter, nextStep, presenterReducer } from "../../net/presenter";
-import type { JoinResponse, Profile, RoomInfo, UpdateResponse } from "../../net/protocol";
+import { POLL_SECONDS, type JoinResponse, type Profile, type RoomInfo, type UpdateResponse } from "../../net/protocol";
 import type { OnlineIntent } from "./intent";
 import { type DealPresentation, useDealPresentation, useReducedMotion } from "../dealPresentation";
 import { setAddress } from "../url";
-import { forgetSeatToken, loadSeatToken, saveSeatToken } from "./seats";
+import { forgetSeatToken, loadSeatToken, loadSeatTokens, saveSeatToken } from "./seats";
 
 export type Status = "joining" | "connected" | "reconnecting" | "failed";
 
@@ -68,7 +68,7 @@ function joinOnce(intent: OnlineIntent, profile: Profile, prefs: Prefs): Promise
       intent.type === "create"
         ? createAndDeal(profile, prefs)
         : intent.type === "quickplay"
-          ? quickplayRoom(profile, prefs)
+          ? quickplayRoom(profile, prefs, loadSeatTokens())
           : joinRoom(intent.code, profile, loadSeatToken(intent.code));
     joins.set(intent, promise);
   }
@@ -76,7 +76,6 @@ function joinOnce(intent: OnlineIntent, profile: Profile, prefs: Prefs): Promise
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-const POLL_SECONDS = 25;
 const MIN_IDLE_POLL_MS = 1000;
 
 export function useRoom(intent: OnlineIntent, profile: Profile, prefs: Prefs, timing: Timing): RoomHandle {
@@ -179,7 +178,7 @@ export function useRoom(intent: OnlineIntent, profile: Profile, prefs: Prefs, ti
             since: since.current,
             rev: rev.current,
             // After a failure, ask for an immediate answer: a long poll on a quiet room could keep the
-            // "Reconnecting…" banner up for 25 seconds after the network is already back.
+            // "Reconnecting…" banner up until the next long poll ends.
             wait: failures > 0 ? 0 : POLL_SECONDS,
             signal: controller.signal,
           });

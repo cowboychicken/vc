@@ -2,11 +2,13 @@ import type { BotLevel } from "../bots";
 import { DECK_SIZE, type Move, type PlayerView, type RuleOptions } from "../engine";
 
 /** Bump when the wire format or game rules change in a way an old page can't cope with. */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 export const VERSION_HEADER = "x-vc13-version";
 
 export const NUM_SEATS = 4;
 export const MAX_NAME_LENGTH = 12;
+export const POLL_SECONDS = 2;
+export const MAX_SAVED_ROOMS = 6;
 
 // --- Names and colours -------------------------------------------------------------------------
 
@@ -84,7 +86,7 @@ export interface SeatInfo {
   playerId: number;
   name: string;
   color: ColorId | null;
-  /** A human who has not been heard from recently; a bot plays for them until they are back. */
+  /** Retained for wire compatibility; disconnected humans now leave instead of becoming away. */
   away: boolean;
   host: boolean;
   /** Turns this player has let run out in this room; at the limit they lose the seat. */
@@ -129,7 +131,7 @@ export interface RoomInfo {
   playerStats: RoomPlayerStats[];
   /** Deal code of the current or last game. For reference only: online play never loads a deal from a code. */
   dealCode: string | null;
-  /** Whose turn is being timed, or null when a bot is up, nobody is playing or the seat is away. */
+  /** Whose turn is being timed, or null when a bot is up or nobody is playing. */
   turn: TurnInfo | null;
   /** Timed-out turns a player may have before losing the seat. */
   maxStrikes: number;
@@ -142,7 +144,7 @@ export interface Frame {
   kind: "deal" | "move";
   /** Seat that moved, or -1 for a deal. */
   by: number;
-  /** The move was made by a bot (a bot seat, or a bot covering for an absent player). */
+  /** The move was made by a bot (a bot seat, or a bot covering a timed-out turn). */
   bot: boolean;
   view: PlayerView;
 }
@@ -170,6 +172,13 @@ export interface CreateRoomRequest extends Profile {
   /** The creator's preferences, used until the host changes them. */
   rules?: RuleOptions;
   botLevel?: BotLevel;
+}
+export interface SavedRoomToken {
+  code: string;
+  token: string;
+}
+export interface QuickplayRequest extends CreateRoomRequest {
+  roomTokens?: SavedRoomToken[];
 }
 export interface JoinRoomRequest extends Profile {
   /** Token from an earlier visit, to reclaim a seat or return with the same room stats. */
@@ -212,6 +221,18 @@ export interface ErrorBody {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+export function parseRoomTokens(input: unknown): SavedRoomToken[] | null {
+  if (!Array.isArray(input) || input.length > MAX_SAVED_ROOMS) return null;
+  const result: SavedRoomToken[] = [];
+  for (const entry of input) {
+    if (!isRecord(entry) || typeof entry.code !== "string" || normalizeRoomCode(entry.code) !== entry.code ||
+        typeof entry.token !== "string" || !/^[0-9a-f]{32}$/.test(entry.token) ||
+        result.some((saved) => saved.code === entry.code)) return null;
+    result.push({ code: entry.code, token: entry.token });
+  }
+  return result;
+}
 
 export function parseMove(input: unknown): Move | null {
   if (!isRecord(input)) return null;

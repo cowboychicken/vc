@@ -122,6 +122,20 @@ describe("creating and joining", () => {
     expect(manager.peek(code)).not.toBeNull();
   });
 
+  it("keeps Quick Play random when a saved seat is reclaimable", () => {
+    let generating = true;
+    let next = 0;
+    const { manager } = setup({ randomInt: (max) => generating ? next++ % max : next % max });
+    const first = manager.create(ann);
+    const second = manager.create(bo);
+    const saved = [{ code: second.code, token: second.token }];
+    generating = false;
+    next = 0;
+    expect(manager.randomJoinableRoom(saved)).toBe(first.code);
+    next = 1;
+    expect(manager.randomJoinableRoom(saved)).toBe(second.code);
+  });
+
   it("caps the number of rooms", () => {
     const { manager } = setup({ maxRooms: 2 });
     manager.create(ann);
@@ -297,64 +311,70 @@ describe("settings", () => {
 });
 
 describe("absent players", () => {
-  it("has a bot cover a turn once the player has been quiet too long, and hands back when they return", () => {
-    const { manager, clock } = setup({ awayMs: 45_000 });
+  it("releases a quiet player's seat at the deadline, lets a bot play, and allows rejoining", () => {
+    const { manager, clock } = setup({ turnMs: 60_000 });
     const { code, token } = manager.create(ann);
     const guest = manager.join(code, bo);
-    // Leader is seat 1 (Bo) so it is a human's turn who will then go quiet.
     manager.start(code, token, encodeDeal({ seed: 28, leader: 1 }));
     const start = manager.update(code, token, -1);
     expect(last(start).view.turn).toBe(1);
 
-    clock.t += 30_000;
-    manager.update(code, token, -1); // Ann stays around
-    clock.t += 20_000; // Bo has now been quiet for 50 seconds
+    clock.t += 4_999;
     manager.update(code, token, -1);
-    const changed = manager.sweep();
-    expect(changed).toContain(code);
+    manager.sweep();
+    expect(manager.peek(code)!.seats[1]!.kind).toBe("human");
+
+    clock.t += 1;
+    expect(manager.sweep()).toContain(code);
 
     const after = manager.update(code, token, last(start).n);
     expect(after.frames.length).toBeGreaterThan(0);
     expect(after.frames[0]).toMatchObject({ kind: "move", by: 1, bot: true });
-    expect(after.room.seats[1]!.away).toBe(true);
+    expect(after.room.seats[1]).toMatchObject({ kind: "bot", strikes: 0 });
+    expectError(() => manager.update(code, guest.token, -1), 401);
 
-    // Bo comes back: no longer away, and is in charge of their own turns again.
-    const back = manager.update(code, guest.token, -1);
-    expect(back.room.seats[1]!.away).toBe(false);
+    const back = manager.join(code, bo, guest.token);
+    expect(back.token).toBe(guest.token);
+    expect(manager.update(code, back.token, -1).room.seats[1]!.kind).toBe("human");
   });
 
-  it("passes the host role to someone who is around", () => {
+  it("releases the disconnected host and passes the host role to a remaining player", () => {
     const { manager, clock } = setup({ awayMs: 10_000 });
     const { code, token } = manager.create(ann);
     const guest = manager.join(code, bo);
-    clock.t += 20_000;
+    const other = manager.join(code, { name: "Cy", color: "green" });
+    clock.t += 10_000;
     manager.update(code, guest.token, -1);
     expect(manager.sweep()).toContain(code);
     const room = manager.update(code, guest.token, -1).room;
     expect(room.host).toBe(1);
-    expect(room.seats[0]!.away).toBe(true);
-    expectError(() => manager.start(code, token), 403);
+    expect(room.seats[0]!.kind).toBe("bot");
+    expect(room.seats[2]!.kind).toBe("bot");
+    expectError(() => manager.update(code, token, -1), 401);
+    expectError(() => manager.update(code, other.token, -1), 401);
   });
 
-  it("does not take the host role from someone just because everyone is away", () => {
+  it("deletes a room immediately when all humans time out together", () => {
     const { manager, clock } = setup({ awayMs: 10_000 });
-    const { code } = manager.create(ann);
-    manager.join(code, bo);
-    clock.t += 20_000;
-    manager.sweep();
-    expect(manager.peek(code)!.host).toBe(0);
-  });
-
-  it("deletes rooms that nobody has been in for a long time", () => {
-    const { manager, clock } = setup({ awayMs: 10_000, emptyRoomMs: 60_000 });
     const { code, token } = manager.create(ann);
-    clock.t += 30_000;
-    manager.sweep();
-    expect(manager.peek(code)).not.toBeNull();
-    clock.t += 60_000;
+    manager.join(code, bo);
+    clock.t += 10_000;
     expect(manager.sweep()).toContain(code);
     expect(manager.peek(code)).toBeNull();
     expectError(() => manager.update(code, token, -1), 404);
+  });
+
+  it("refreshes the disconnect deadline on each poll", () => {
+    const { manager, clock } = setup({ awayMs: 10_000 });
+    const { code, token } = manager.create(ann);
+    clock.t += 9_000;
+    manager.seen(code, token);
+    clock.t += 9_999;
+    manager.sweep();
+    expect(manager.peek(code)).not.toBeNull();
+    clock.t += 1;
+    expect(manager.sweep()).toContain(code);
+    expect(manager.peek(code)).toBeNull();
   });
 });
 
@@ -520,7 +540,7 @@ describe("turn timer", () => {
     expect(manager.update(code, back.token, -1).room.seats[manager.update(code, back.token, -1).seat]!.strikes).toBe(0);
   });
 
-  it("doesn't count strikes against an away player, whom a bot already covers", () => {
+  it("removes a disconnected player before applying a turn timeout", () => {
     const { manager, clock } = setup({ turnMs: 10_000, turnGraceMs: 0, awayMs: 5_000 });
     const { code, token } = manager.create(ann);
     const guest = manager.join(code, bo);
@@ -529,7 +549,8 @@ describe("turn timer", () => {
     manager.update(code, guest.token, -1); // only the guest is heard from
     manager.sweep();
     const room = manager.update(code, guest.token, -1).room;
-    expect(room.seats[0]).toMatchObject({ kind: "human", away: true, strikes: 0 });
+    expect(room.seats[0]).toMatchObject({ kind: "bot", strikes: 0 });
+    expect(manager.join(code, ann, token).token).toBe(token);
   });
 });
 

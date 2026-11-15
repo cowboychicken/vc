@@ -130,6 +130,8 @@ describe("room API", () => {
       expect(matched.body!.created).toBe(false);
       expect(matched.body!.room.code).toBe(first.body!.room.code);
       expect(matched.body!.seat).toBe(1);
+      expect(matched.body!.room.seats.map((seat) => seat.name)).toEqual(["Ann", "Ann 2", "Bot Two", "Bot Three"]);
+      expect(matched.body!.room.seats[1]!.name).toBe("Ann 2");
 
       const code = first.body!.room.code;
       for (const profile of [{ name: "Cy", color: "green" }, { name: "Di", color: "pink" }]) {
@@ -141,6 +143,75 @@ describe("room API", () => {
       expect(fallback.body!.seat).toBe(0);
     } finally {
       await h.close();
+    }
+  });
+
+  it("reclaims a saved Quick Play seat, including when the room is full", async () => {
+    const isolated = await start();
+    try {
+      const made = (await call<JoinResponse>(isolated.base, "POST", "/api/rooms", { body: ann })).body!;
+      const code = made.room.code;
+      const joined = (await call<JoinResponse>(isolated.base, "POST", `/api/rooms/${code}/join`, { body: bo })).body!;
+      const roomTokens = [{ code, token: joined.token }];
+      const quickplay = () => call<JoinResponse & { created: boolean }>(isolated.base, "POST", "/api/rooms/quickplay", {
+        body: { ...bo, roomTokens },
+      });
+
+      const back = await quickplay();
+      expect(back.body).toMatchObject({ created: false, token: joined.token, seat: 1 });
+      expect(back.body!.room.seats.map((s) => s.name)).toEqual(["Ann", "Bo", "Bot Two", "Bot Three"]);
+      expect(back.body!.room.seats[1]!.playerId).toBe(joined.room.seats[1]!.playerId);
+
+      for (const profile of [{ name: "Cy", color: "green" }, { name: "Di", color: "pink" }]) {
+        await call(isolated.base, "POST", `/api/rooms/${code}/join`, { body: profile });
+      }
+      const full = await quickplay();
+      expect(full.body).toMatchObject({ created: false, token: joined.token, seat: 1 });
+      expect(full.body!.room.code).toBe(code);
+    } finally {
+      await isolated.close();
+    }
+  });
+
+  it("uses the saved identity after a disconnect, but does not bypass a host kick", async () => {
+    let now = 1_000_000;
+    const isolated = await start({ now: () => now });
+    try {
+      const made = (await call<JoinResponse>(isolated.base, "POST", "/api/rooms", { body: ann })).body!;
+      const code = made.room.code;
+      const joined = (await call<JoinResponse>(isolated.base, "POST", `/api/rooms/${code}/join`, { body: bo })).body!;
+      const roomTokens = [{ code, token: joined.token }];
+      now += 5_000;
+      await call(isolated.base, "GET", `/api/rooms/${code}/updates`, { token: made.token });
+      isolated.api.manager.sweep();
+      const returned = await call<JoinResponse & { created: boolean }>(isolated.base, "POST", "/api/rooms/quickplay", {
+        body: { ...bo, roomTokens },
+      });
+      expect(returned.body).toMatchObject({ created: false, token: joined.token, seat: 1 });
+      expect(returned.body!.room.seats[1]!.playerId).toBe(joined.room.seats[1]!.playerId);
+
+      await call(isolated.base, "POST", `/api/rooms/${code}/kick`, { token: made.token, body: { seat: 1 } });
+      const kicked = await call<JoinResponse & { created: boolean }>(isolated.base, "POST", "/api/rooms/quickplay", {
+        body: { ...bo, roomTokens },
+      });
+      expect(kicked.body!.created).toBe(true);
+      expect(kicked.body!.room.code).not.toBe(code);
+    } finally {
+      await isolated.close();
+    }
+  });
+
+  it("rejects malformed saved tokens in Quick Play requests", async () => {
+    const bad = [
+      null,
+      [{ code: "ABC234", token: "bad" }],
+      [{ code: "abc234", token: "a".repeat(32) }],
+      Array.from({ length: 7 }, () => ({ code: "ABC234", token: "a".repeat(32) })),
+      [{ code: "ABC234", token: "a".repeat(32) }, { code: "ABC234", token: "b".repeat(32) }],
+    ];
+    for (const roomTokens of bad) {
+      const response = await call(h.base, "POST", "/api/rooms/quickplay", { body: { ...ann, roomTokens } });
+      expect(response.status).toBe(400);
     }
   });
 
@@ -158,6 +229,31 @@ describe("room API", () => {
     });
     expect(returned.body!.token).toBe(joined.token);
     expect(returned.body!.room.seats[returned.body!.seat]!.playerId).toBe(id);
+  });
+
+  it("releases disconnected seats and deletes the room when its last human times out", async () => {
+    let now = 1_000_000;
+    const isolated = await start({ now: () => now });
+    try {
+      const made = (await call<JoinResponse>(isolated.base, "POST", "/api/rooms", { body: ann })).body!;
+      const code = made.room.code;
+      const joined = (await call<JoinResponse>(isolated.base, "POST", `/api/rooms/${code}/join`, { body: bo })).body!;
+      now += 5_000;
+      await call(isolated.base, "GET", `/api/rooms/${code}/updates`, { token: made.token });
+      isolated.api.manager.sweep();
+      expect((await call(isolated.base, "GET", `/api/rooms/${code}/updates`, { token: joined.token })).status).toBe(401);
+      const returned = await call<JoinResponse>(isolated.base, "POST", `/api/rooms/${code}/join`, {
+        body: { ...bo, token: joined.token },
+      });
+      expect(returned.body!.token).toBe(joined.token);
+      expect(returned.body!.room.seats[1]!.kind).toBe("human");
+
+      now += 5_000;
+      isolated.api.manager.sweep();
+      expect((await call(isolated.base, "GET", `/api/rooms/${code}`)).status).toBe(404);
+    } finally {
+      await isolated.close();
+    }
   });
 
   it("returns clear errors for bad input", async () => {
@@ -322,6 +418,14 @@ describe("room API", () => {
       } finally {
         await capped.close();
       }
+    });
+
+    it("caps the default wait below the disconnect timeout", async () => {
+      const { code, token, first } = await create();
+      const t0 = Date.now();
+      const response = await call(h.base, "GET", `/api/rooms/${code}/updates?since=-1&rev=${first.room.rev}&wait=25`, { token });
+      expect(response.status).toBe(200);
+      expect(Date.now() - t0).toBeLessThan(4000);
     });
   });
 });

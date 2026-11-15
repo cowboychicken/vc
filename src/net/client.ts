@@ -11,8 +11,10 @@ import {
   PROTOCOL_VERSION,
   type Profile,
   type ProfileRequest,
+  type QuickplayRequest,
   type QuickplayResponse,
   type RoomInfo,
+  type SavedRoomToken,
   type SettingsRequest,
   type StartRequest,
   type UpdateResponse,
@@ -67,8 +69,8 @@ const room = (code: string, action = "") => `/api/rooms/${code}${action ? `/${ac
 export const createRoom = (profile: Profile, prefs: { rules: RuleOptions; botLevel: BotLevel }) =>
   request<JoinResponse>("POST", "/api/rooms", { body: { ...profile, ...prefs } satisfies CreateRoomRequest });
 
-export const quickplayRoom = (profile: Profile, prefs: { rules: RuleOptions; botLevel: BotLevel }) =>
-  request<QuickplayResponse>("POST", "/api/rooms/quickplay", { body: { ...profile, ...prefs } satisfies CreateRoomRequest });
+export const quickplayRoom = (profile: Profile, prefs: { rules: RuleOptions; botLevel: BotLevel }, roomTokens: SavedRoomToken[]) =>
+  request<QuickplayResponse>("POST", "/api/rooms/quickplay", { body: { ...profile, ...prefs, roomTokens } satisfies QuickplayRequest });
 
 export const peekRoom = (code: string) => request<RoomInfo>("GET", room(code));
 

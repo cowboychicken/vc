@@ -78,13 +78,13 @@ App ─┬─ LandingPage
 The server is a **relay and referee**, not a push service. The idea that makes it simple: with at most four people, each client just *asks* for news.
 
 - A room keeps an append-only list of **frames**. A frame is "the game after this step" (a deal or a move). Stored frames hold a full `GameState`; what goes on the wire is `viewFor(state, seat)` for the asking seat.
-- Each client remembers the last frame number `since` and the room revision `rev` it has seen, and long-polls `GET /api/rooms/:code/updates?since=N&rev=R&wait=25`. The server answers the moment there is something newer, or after `wait` seconds with "nothing new". Then the client asks again.
+- Each client remembers the last frame number `since` and the room revision `rev` it has seen, and long-polls `GET /api/rooms/:code/updates?since=N&rev=R&wait=2`. The server answers the moment there is something newer, or after `wait` seconds with "nothing new". Then the client asks again. The two-second maximum also keeps active players present under the five-second disconnect timeout.
 - Anything you *do* (move, start, settings, profile) is a `POST` that returns the same shape as a poll, so your own screen updates without waiting for the next poll.
 - Frames are retained (the newest 40) and at most 12 are sent per response. A client that fell far behind just jumps to the newest.
 
 ### Identity
 
-There are no accounts. Joining returns a random 128-bit **seat token**; the client keeps it in `localStorage` (`vc13.rooms`, six newest rooms) and sends it as `Authorization: Bearer <token>`. The server looks the seat up by token (constant-time compare), so no seat number is ever sent. Present the saved token when joining again (after a reload, a locked phone, or a crash) and you get your seat back. Leaving gives up the seat but keeps the token locally: returning to the same room on that device joins an available seat with the same participant stats, provided the room still exists. Once left, the token cannot act until it joins again. Tokens are never included in room info or stats. A name and a colour are just display settings. Names are unique among current seats (a clash becomes "Sam 2"), and bot names are always reserved.
+There are no accounts. Joining returns a random 128-bit **seat token**; the client keeps it in `localStorage` (`vc13.rooms`, six newest rooms) and sends it as `Authorization: Bearer <token>`. The server looks the seat up by token (constant-time compare), so no seat number is ever sent. Present the saved token when joining again and you get your seat back if it is still yours. Quick Play sends the saved room tokens too: it still chooses randomly, but reclaims the seat if the selected room recognizes its token, including in an otherwise full room. A kicked token excludes that room from Quick Play. Leaving or a five-second disconnect gives up the seat but keeps the token locally: returning to the same room on that device joins an available seat with the same participant stats, provided the room still exists. Once left, the token cannot act until it joins again. Tokens are never included in room info or stats. A name and a colour are just display settings. Names are unique among current seats (a clash becomes "Sam 2"), and bot names are always reserved.
 
 ### Endpoints
 
@@ -94,7 +94,7 @@ All `/api/rooms*` calls need the header `x-vc13-version: <PROTOCOL_VERSION>` (ot
 | --- | --- | --- |
 | `GET /api/health` | anyone | `{ ok, rooms }`, used by the container healthcheck. |
 | `POST /api/rooms` | anyone | Create a room (name, colour, optional rules and bot level). You become the host in seat 0. Rate limited per IP. |
-| `POST /api/rooms/quickplay` | anyone | Join a random room with a present human and an open bot seat, or create and start a room if none qualifies. Creation is rate limited per IP. |
+| `POST /api/rooms/quickplay` | anyone | Join a random room with a present human and an open bot seat or a reclaimable saved seat, or create and start a room if none qualifies. Accepts up to six room tokens. Creation is rate limited per IP. |
 | `GET /api/rooms/:code` | anyone | Peek: `RoomInfo` without joining (404 if gone). |
 | `POST /api/rooms/:code/join` | anyone | Take the lowest bot seat (even mid-game), or reclaim yours with `token`. `409` if full. |
 | `GET /api/rooms/:code/updates?since&rev&wait` | member | Long poll. Marks you as present. |
@@ -111,15 +111,15 @@ Types, validators, name/colour rules and room-code handling are all in `src/net/
 
 - **Phases:** `lobby` (only for an instant between creating a room and the client's first start) → `playing` → `over` → (host starts again) `playing` …
 - **Seats:** the host starts in seat 0. Empty seats are bots named by seat: Bot One, Bot Two and Bot Three for seats 1 to 3 (and Bot Four if seat 0 is ever vacated). A joiner takes the lowest bot seat.
-- **Quickplay:** a random room must have at least one present human and one bot seat. If none qualifies, the server creates and starts a new room for the player.
+- **Quickplay:** a random room must have at least one present human and either a bot seat or the player's existing seat. Rooms that rejected a saved token are excluded. If none qualifies, the server creates and starts a new room for the player.
 - **Kicking:** only the host can kick another human. Their seat becomes a bot; the old token is denied if it tries to reclaim the seat, but no account-level ban is possible.
-- **Player stats:** `RoomManager` tracks each human participant by room token and each bot by its fixed seat, independently of seat changes. A finished game counts once for everyone who occupied a seat during it, including mid-game arrivals and leavers; its win goes to the winning seat's occupant at the end. An away player's covering bot counts as that player, while a bot replacing a player who left counts separately. Renames update the participant's displayed name. Stats persist only in the room's memory and are lost with the room. To bound history, a room admits at most 100 distinct human participants over its lifetime; returning participants do not consume another slot.
+- **Player stats:** `RoomManager` tracks each human participant by room token and each bot by its fixed seat, independently of seat changes. A finished game counts once for everyone who occupied a seat during it, including mid-game arrivals and leavers; its win goes to the winning seat's occupant at the end. A bot replacing a player who left counts separately. Renames update the participant's displayed name. Stats persist only in the room's memory and are lost with the room. To bound history, a room admits at most 100 distinct human participants over its lifetime; returning participants do not consume another slot.
 - **Who leads:** the first game opens with the 3♠ holder. Later games are led by the previous winner. The deal is always random: online play never loads a deal from a code (`RoomManager.start` takes an optional deal code only so tests can fix a deal; the HTTP layer never passes one).
 - **Bots run on the server.** After every human action the server plays all consecutive bot turns (`advanceBots`) and stops at a present human or the end of the game. The client is shown them as separate frames, flagged `bot: true`.
-- **Away takeover.** A human not heard from for 45 s is marked *away* and a bot plays their turns. They resume the moment they poll again.
-- **Turn timer and strikes.** When a present human becomes the one to move, the server arms a deadline of `turnMs` (25 s) plus `turnGraceMs` (4 s, so the client's playback of earlier moves doesn't eat into the player's time). `sweep` (every second) checks it. On timeout a bot plays that move (the frame is flagged `bot: true`) and the seat gains a *strike*. At `maxStrikes` (3) the seat becomes a bot, the token is added to `kickedTokens` as `idle` (its saved token gets `403` with its own message), and the host role moves on if needed. If no humans remain, the room is deleted. Strikes live on the seat, so leaving or being replaced resets them, and a move does not clear them. The bots cover away players first in `sweep`, so away players get no strikes. `RoomInfo` carries `turn` (`seat`, `endsInMs`, `limitMs`), `maxStrikes` and each seat's `strikes`.
-- **Host handover.** If the host leaves, or is away, the host role moves to the lowest-numbered present human. It does not move back when the old host returns (unless the new one also goes away).
-- **Expiry.** A room is deleted when its last human leaves, or after 30 minutes with nobody present. At most 200 rooms exist at once.
+- **Disconnect timeout.** The one-second `sweep` removes a human after 5 s without server contact, replaces their seat with a bot and advances the game. A returning player can rejoin with their saved token if the room and a free seat remain. Network interruptions and suspended tabs can trigger this timeout. The `away` wire field remains for compatibility and is always false.
+- **Turn timer and strikes.** When a human becomes the one to move, the server arms a deadline of `turnMs` (25 s) plus `turnGraceMs` (4 s, so the client's playback of earlier moves doesn't eat into the player's time). `sweep` (every second) checks it. On timeout a bot plays that move (the frame is flagged `bot: true`) and the seat gains a *strike*. At `maxStrikes` (3) the seat becomes a bot, the token is added to `kickedTokens` as `idle` (its saved token gets `403` with its own message), and the host role moves on if needed. If no humans remain, the room is deleted. Strikes live on the seat, so leaving or being replaced resets them, and a move does not clear them. Disconnected seats are removed before turn timeouts are checked. `RoomInfo` carries `turn` (`seat`, `endsInMs`, `limitMs`), `maxStrikes` and each seat's `strikes`.
+- **Host handover.** If the host leaves or disconnects, the host role moves to the lowest-numbered remaining human. It does not move back when the old host returns.
+- **Expiry.** A room is deleted as soon as its last human leaves or is removed. At most 200 rooms exist at once.
 
 ## 6. Showing what happened (the presenter)
 
@@ -146,7 +146,7 @@ Resilience built into the loop:
 | File | Role |
 | --- | --- |
 | `rooms.ts` | `RoomManager`: every rule of the room model above. It has no HTTP in it and takes injectable `now`, `randomInt` and `randomToken`, which is why it is tested with a fake clock. |
-| `app.ts` | `createApi`: routing, the version check, body limit (4 KB), per-IP create rate limit (20 per 10 min), the long poll (wakes on `subscribe` notifications), error mapping, and a 1 s housekeeping `sweep` (away flags, host handover, bots covering away players, turn timeouts, room expiry). |
+| `app.ts` | `createApi`: routing, the version check, body limit (4 KB), per-IP create rate limit (20 per 10 min), the long poll (wakes on `subscribe` notifications), error mapping, and a 1 s housekeeping `sweep` (disconnects, host handover, turn timeouts, room expiry). |
 | `static.ts` | Serves `dist/` with path-traversal protection and an SPA fallback to `index.html`. |
 | `limits.ts` | A sliding-window `RateLimiter`. |
 | `index.ts` | Production entry point: reads env, creates the HTTP server, handles `SIGTERM`/`SIGINT` (closes idle connections, cuts long polls after 3 s). |
@@ -170,10 +170,10 @@ The `Dockerfile` is a two-stage `node:22-alpine` build that copies only `dist/` 
 
 Things to remember when hosting:
 
-- Cloudflare closes a quiet request at about 100 s. The long poll is 25 s, well under it. Keep it that way, and keep the server's keep-alive (65 s) above any proxy's idle timeout.
+- Cloudflare closes a quiet request at about 100 s. The long poll is 2 s, below both that and the 5 s disconnect timeout. Keep the server's keep-alive (65 s) above any proxy's idle timeout.
 - One process holds all rooms. Don't run several replicas without sticky routing or shared state; for four friends a single container is the right size.
 - Restarting the container ends all games (clients see a clear message and can make a new room).
-- What was verified: the Docker image builds, runs as `node`, reports healthy, stops in under a second on `SIGTERM`, and rate-limits per forwarded IP. A real Cloudflare Tunnel and Traefik were **not** tested here, so confirm in your environment that long polls pass through (a 25 s request should complete, and `/api/health` should answer through the public hostname).
+- What was verified: the Docker image builds, runs as `node`, reports healthy, stops in under a second on `SIGTERM`, and rate-limits per forwarded IP. A real Cloudflare Tunnel and Traefik were **not** tested here, so confirm in your environment that long polls pass through (a 2 s request should complete, and `/api/health` should answer through the public hostname).
 
 ## 9. Testing
 
@@ -186,7 +186,7 @@ Things to remember when hosting:
 | `dealCode.test.ts` | Round trips, typo rejection, forgiving input. |
 | `session.test.ts` | The single-player reducer. |
 | `protocol.test.ts` | Names, colours, room codes, validators. |
-| `rooms.test.ts` | The whole room model with a fake clock: join, leave, Quick Play matching, host kick, host handover, away takeover, turn timer and strikes, settings, start, expiry, hidden hands per seat, long-poll subscriptions. |
+| `rooms.test.ts` | The whole room model with a fake clock: join, leave, Quick Play matching, host kick, host handover, disconnect removal, turn timer and strikes, settings, start, expiry, hidden hands per seat, long-poll subscriptions. |
 | `http.test.ts` | Real HTTP against an ephemeral server: routing, Quick Play and kick endpoints, version check, limits, long-poll wake-up, static serving, `robots.txt` and `sitemap.xml`. |
 | `presenter.test.ts` | Frame playback order and timing as pure data. |
 

@@ -5,12 +5,14 @@ import {
   type JoinResponse,
   type QuickplayResponse,
   NUM_SEATS,
+  POLL_SECONDS,
   PROTOCOL_VERSION,
   VERSION_HEADER,
   normalizeRoomCode,
   parseBotLevel,
   parseMove,
   parseProfile,
+  parseRoomTokens,
   parseRules,
   parseSince,
 } from "../src/net/protocol";
@@ -85,7 +87,7 @@ function bearer(req: IncomingMessage): string {
 export function createApi(options: ApiOptions = {}): Api {
   const now = options.now ?? Date.now;
   const manager = options.manager ?? new RoomManager({ now });
-  const maxWaitMs = options.maxWaitMs ?? 25_000;
+  const maxWaitMs = options.maxWaitMs ?? POLL_SECONDS * 1000;
   const creates = new RateLimiter(options.createLimit ?? 20, 10 * 60_000, now);
   const sweepMs = options.sweepMs ?? 1_000;
   const timer =
@@ -241,10 +243,12 @@ export function createApi(options: ApiOptions = {}): Api {
         const rules = body.rules === undefined ? undefined : (parseRules(body.rules) ?? undefined);
         const botLevel = body.botLevel === undefined ? undefined : (parseBotLevel(body.botLevel) ?? undefined);
         const since = parseSince(body.since);
-        const match = manager.randomJoinableRoom();
+        const roomTokens = parseRoomTokens(body.roomTokens === undefined ? [] : body.roomTokens);
+        if (!roomTokens) throw new RoomError(400, "bad_request", "Those saved room tokens aren't valid.");
+        const match = manager.randomJoinableRoom(roomTokens);
         let response: QuickplayResponse;
         if (match) {
-          const { token } = manager.join(match, profile);
+          const { token } = manager.join(match, profile, roomTokens.find((saved) => saved.code === match)?.token);
           response = { ...manager.update(match, token, since), token, created: false };
         } else {
           if (!creates.hit(clientAddress(req))) {
