@@ -36,7 +36,7 @@ export interface RoomHandle {
   room: RoomInfo | null;
   presenter: PresenterState;
   move: (move: Move) => void;
-  start: (dealCode?: string) => void;
+  start: () => void;
   setSettings: (patch: { rules?: RuleOptions; botLevel?: BotLevel }) => void;
   setProfile: (profile: Profile) => void;
   /** Gives up the seat and stops polling. Resolves once the server has been told. */
@@ -239,7 +239,7 @@ export function useRoom(intent: OnlineIntent, profile: Profile, prefs: Prefs, ti
     room,
     presenter,
     move: (move) => void act((c, t, s) => sendMove(c, t, move, s)),
-    start: (dealCode) => void act((c, t, s) => startGame(c, t, s, dealCode)),
+    start: () => void act((c, t, s) => startGame(c, t, s)),
     setSettings: (patch) => void act((c, t, s) => sendSettings(c, t, s, patch)),
     setProfile: (next) => void act((c, t, s) => sendProfile(c, t, s, next)),
     leave: async () => {

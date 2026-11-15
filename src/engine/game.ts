@@ -114,6 +114,20 @@ export function viewFor(state: GameState, seat: number): PlayerView {
   };
 }
 
+/**
+ * The winner's last play: the cards that took them out. After an instant win nothing was played, so it is
+ * the dealt hand. Empty while the game is still running.
+ */
+export function winningPlay(view: Pick<PlayerView, "winner" | "history" | "revealed">): Card[] {
+  const winner = view.winner;
+  if (winner === null) return [];
+  for (let i = view.history.length - 1; i >= 0; i--) {
+    const entry = view.history[i]!;
+    if (entry.seat === winner && entry.combo) return [...entry.combo.cards];
+  }
+  return [...(view.revealed?.[winner] ?? [])];
+}
+
 /** Legal plays for the seat the view belongs to (empty unless it is that seat's turn). */
 export function legalPlaysForView(view: PlayerView): Combo[] {
   if (view.winner !== null || view.turn !== view.seat) return [];

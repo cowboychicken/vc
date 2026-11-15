@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Api, type ApiOptions, createApi } from "../server/app";
 import { createStatic } from "../server/static";
-import { encodeDeal, legalMovesForView, newGame } from "../src/engine";
+import { legalMovesForView } from "../src/engine";
 import { type JoinResponse, PROTOCOL_VERSION, type UpdateResponse, VERSION_HEADER } from "../src/net/protocol";
 
 interface Harness {
@@ -162,11 +162,9 @@ describe("room API", () => {
 
   it("plays a whole game over the wire, one request per move", async () => {
     const { code, token } = await create();
-    let seed = 1;
-    while (newGame({ seed }).turn !== 0 || newGame({ seed }).winner !== null) seed++;
     const started = await call<UpdateResponse>(h.base, "POST", `/api/rooms/${code}/start`, {
       token,
-      body: { dealCode: encodeDeal({ seed }), since: -1 },
+      body: { since: -1 },
     });
     expect(started.status).toBe(200);
     let state = started.body!;
@@ -183,6 +181,17 @@ describe("room API", () => {
     expect(state.room.games).toBe(1);
     const next = await call<UpdateResponse>(h.base, "POST", `/api/rooms/${code}/start`, { token, body: { since: -1 } });
     expect(next.body!.room.phase === "playing" || next.body!.room.phase === "over").toBe(true);
+  });
+
+  it("never lets a client pick or replay a deal", async () => {
+    const { code, token } = await create();
+    const r = await call<{ error: string }>(h.base, "POST", `/api/rooms/${code}/start`, {
+      token,
+      body: { dealCode: "0000-0727", since: -1 },
+    });
+    expect(r.status).toBe(400);
+    const info = await call<UpdateResponse>(h.base, "GET", `/api/rooms/${code}/updates?since=-1&rev=0&wait=0`, { token });
+    expect(info.body!.room.phase).toBe("lobby");
   });
 
   describe("long polling", () => {

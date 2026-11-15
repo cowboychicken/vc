@@ -2,7 +2,7 @@ import type { BotLevel } from "../bots";
 import { DECK_SIZE, type Move, type PlayerView, type RuleOptions } from "../engine";
 
 /** Bump when the wire format or game rules change in a way an old page can't cope with. */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 export const VERSION_HEADER = "x-vc13-version";
 
 export const NUM_SEATS = 4;
@@ -104,7 +104,7 @@ export interface RoomInfo {
   /** Games finished in this room, and how many each seat has won. */
   games: number;
   wins: number[];
-  /** Deal code of the current or last game. */
+  /** Deal code of the current or last game. For reference only: online play never loads a deal from a code. */
   dealCode: string | null;
 }
 
@@ -150,9 +150,7 @@ export interface SinceRequest {
 export interface MoveRequest extends SinceRequest {
   move: Move;
 }
-export interface StartRequest extends SinceRequest {
-  dealCode?: string;
-}
+export type StartRequest = SinceRequest;
 export interface SettingsRequest extends SinceRequest {
   rules?: RuleOptions;
   botLevel?: BotLevel;

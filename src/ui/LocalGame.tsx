@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { type GameState, encodeDeal, viewFor } from "../engine";
 import { GameScreen } from "./GameScreen";
-import { LocalGameTab, MenuDialog, type MenuTab, BombRow, BotLevelRow, PersonalRows, RulesTab } from "./Menu";
+import { LocalGameTab, MenuDialog, type MenuTab, BombRow, BotLevelRow, PersonalRows } from "./Menu";
 import type { OnlineIntent } from "./online/intent";
 import { LOCAL_PLAYERS, PlayersContext } from "./players";
+import { RulesDialog } from "./Rules";
 import { HUMAN, initSession, isTurnShown, reduceSession } from "./session";
 import { BOT_BY_LEVEL, BOT_TIMING, type Settings, rulesFromSettings } from "./settings";
 import { randomSeed, startingOptions } from "./url";
@@ -20,6 +21,7 @@ export function LocalGame({ settings, onSettings, onOnline }: Props) {
     initSession({ ...startingOptions(), rules: rulesFromSettings(settings) }),
   );
   const [menuOpen, setMenuOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [revealed, setRevealed] = useState<GameState | null>(null);
   const { game } = session;
   const view = useMemo(() => viewFor(game, HUMAN), [game]);
@@ -32,16 +34,16 @@ export function LocalGame({ settings, onSettings, onOnline }: Props) {
   };
 
   // A bot's turn plays out in two beats: first it lights up, then its card lands.
-  // Bots wait while the menu is open.
+  // Bots wait while the menu or the rules are open.
   useEffect(() => {
-    if (menuOpen || game.winner !== null || game.turn === HUMAN) return;
+    if (menuOpen || rulesOpen || game.winner !== null || game.turn === HUMAN) return;
     const timing = BOT_TIMING[settings.botSpeed];
     const id = window.setTimeout(
       turnShown ? () => dispatch({ type: "bot", bot: BOT_BY_LEVEL[settings.botLevel] }) : () => setRevealed(game),
       turnShown ? timing.think : timing.gap,
     );
     return () => window.clearTimeout(id);
-  }, [game, turnShown, menuOpen, settings.botLevel, settings.botSpeed]);
+  }, [game, turnShown, menuOpen, rulesOpen, settings.botLevel, settings.botSpeed]);
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -72,7 +74,6 @@ export function LocalGame({ settings, onSettings, onOnline }: Props) {
         />
       ),
     },
-    { id: "rules", label: "Rules", content: <RulesTab rules={game.rules} /> },
     {
       id: "settings",
       label: "Settings",
@@ -102,6 +103,7 @@ export function LocalGame({ settings, onSettings, onOnline }: Props) {
         dealCode={dealCode}
         onMove={(move) => dispatch({ type: "human", move })}
         onOpenMenu={() => setMenuOpen(true)}
+        onOpenRules={() => setRulesOpen(true)}
         gameOverActions={
           <>
             <button type="button" className="primary" onClick={() => dispatch({ type: "rematch", seed: randomSeed() })} autoFocus>
@@ -114,6 +116,7 @@ export function LocalGame({ settings, onSettings, onOnline }: Props) {
         }
       >
         {menuOpen && <MenuDialog tabs={tabs} onClose={closeMenu} />}
+        {rulesOpen && <RulesDialog rules={game.rules} onClose={() => setRulesOpen(false)} />}
       </GameScreen>
     </PlayersContext.Provider>
   );

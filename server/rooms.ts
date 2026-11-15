@@ -226,7 +226,10 @@ export class RoomManager {
     this.touch(room);
   }
 
-  /** Starts the first game, or the next one. Without a deal code the deal is random. */
+  /**
+   * Starts the first game, or the next one. The deal is random. `dealCode` exists so tests can fix a deal;
+   * the HTTP layer never passes one, so players can't choose or replay a deal.
+   */
   start(code: string, token: string, dealCode?: string): void {
     const room = this.room(code);
     this.requireHost(room, this.auth(room, token));

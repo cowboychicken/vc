@@ -56,10 +56,13 @@ App ─┬─ LocalGame ───────────────┐
 ```
 
 - **`GameScreen`** owns the local interaction only: selected cards, hint, status line, and "click anywhere else clears the selection". It receives `view`, `turnShown`, callbacks and a `gameOverActions` node, so the two modes differ only in what they pass.
-- **Identity UI.** `profile.ts` gives a first-time visitor a random funny name (`FUNNY_NAMES`) and colour, saved in `vc13.profile`, so creating or joining a room never asks for anything. `ProfileEditor` (in the online menu tab) saves a colour the moment it is picked and a name with its Save button. The room code shows in the middle of the header (`GameScreen`'s `headerCenter`).
+- **Identity UI.** `profile.ts` gives a first-time visitor a random funny name (`FUNNY_NAMES`) and colour, saved in `vc13.profile`, so creating or joining a room never asks for anything. `ProfileEditor` (in the online menu tab) saves a colour the moment it is picked and a name with its Save button. The room code shows in the middle of the header (`GameScreen`'s `headerCenter`) and at the top of the online menu tab.
+- **Copying codes.** Every shown deal code or room code is a `CopyCode` (`CopyCode.tsx`): tap or click to copy it, with a short "copied" message from the single `ToastHost` mounted in `App`. There are no separate copy buttons and no invite link (`?room=CODE` links still open a room).
+- **Rules.** The `?` button in the header opens `RulesDialog` (`Rules.tsx`) over the game, in single player and online alike; tapping outside it, Escape or × closes it. Single player pauses the bots while it is open. The rules are not a menu tab.
+- **End screen.** `GameOver` (`Board.tsx`) lists every player in seat order with the same look: the winner's row shows their last play (`winningPlay` in `engine/game.ts`, or the dealt hand after an instant win) with a muted "(winning hand)" note, and the others show what they still held. Online, the host's only action is *Start next game*: no deal-code field and no replay.
 - **`PlayersContext`** (`players.tsx`) says who is at each seat. `relSeat`/`seatAt` rotate the table so *you* are always at the bottom (left, top and right follow clockwise). Single player uses `LOCAL_PLAYERS`; online builds it from the room with `playersFromRoom`.
 - **`turnShown`** exists so a bot's seat lights up *before* its card lands. `LocalGame` does this with a two-step timer. Online, the presenter drives it (section 6).
-- **`Menu.tsx`** is a generic tabbed dialog plus reusable rows (`BombRow`, `BotLevelRow`, `PersonalRows`, `RulesTab`). `LocalGame` and `OnlineApp` each assemble their own tabs.
+- **`Menu.tsx`** is a generic tabbed dialog plus reusable rows (`BombRow`, `BotLevelRow`, `PersonalRows`). `LocalGame` and `OnlineApp` each assemble their own tabs.
 - **Settings and storage** (`settings.ts`, `profile.ts`, `online/seats.ts`) are small wrappers around `localStorage`, each tolerant of storage being blocked or corrupt. Keys: `vc13.settings`, `vc13.profile`, `vc13.rooms`.
 - **URLs** (`url.ts`): `?code=XXXX-XXXX` (or `?seed=N&leader=0..3`) opens a single-player deal; `?room=ABC234` opens an online room.
 - **Responsive layout:** a single CSS file, with a phone layout under 700 px (a square table with the top opponent just above it).
@@ -89,7 +92,7 @@ All `/api/rooms*` calls need the header `x-vc13-version: <PROTOCOL_VERSION>` (ot
 | `POST /api/rooms/:code/join` | anyone | Take the lowest bot seat (even mid-game), or reclaim yours with `token`. `409` if full. |
 | `GET /api/rooms/:code/updates?since&rev&wait` | member | Long poll. Marks you as present. |
 | `POST /api/rooms/:code/move` | member | Play or pass. Validated by the engine. |
-| `POST /api/rooms/:code/start` | host | Start the first or next game, optionally with a deal code. Only from `lobby` or `over`. (The client creates a room and starts it at once, so there is no lobby screen.) |
+| `POST /api/rooms/:code/start` | host | Start the first or next game with a random deal (a body with `dealCode` is rejected with `400`). Only from `lobby` or `over`. (The client creates a room and starts it at once, so there is no lobby screen.) |
 | `POST /api/rooms/:code/settings` | host | Rules (only between games) and bot level (any time). |
 | `POST /api/rooms/:code/profile` | member | Change your name and colour. |
 | `POST /api/rooms/:code/leave` | member | Give up the seat; a bot takes it over. |
@@ -100,7 +103,7 @@ Types, validators, name/colour rules and room-code handling are all in `src/net/
 
 - **Phases:** `lobby` (only for an instant between creating a room and the client's first start) → `playing` → `over` → (host starts again) `playing` …
 - **Seats:** the host starts in seat 0. Empty seats are bots named by seat: Bot One, Bot Two and Bot Three for seats 1 to 3 (and Bot Four if seat 0 is ever vacated). A joiner takes the lowest bot seat.
-- **Who leads:** the first game opens with the 3♠ holder. Later games are led by the previous winner. A deal code, if the host supplies one, is honoured exactly. Otherwise the seed is random.
+- **Who leads:** the first game opens with the 3♠ holder. Later games are led by the previous winner. The deal is always random: online play never loads a deal from a code (`RoomManager.start` takes an optional deal code only so tests can fix a deal; the HTTP layer never passes one).
 - **Bots run on the server.** After every human action the server plays all consecutive bot turns (`advanceBots`) and stops at a present human or the end of the game. The client is shown them as separate frames, flagged `bot: true`.
 - **Away takeover.** A human not heard from for 45 s is marked *away* and a bot plays their turns. They resume the moment they poll again.
 - **Host handover.** If the host leaves, or is away, the host role moves to the lowest-numbered present human. It does not move back when the old host returns (unless the new one also goes away).

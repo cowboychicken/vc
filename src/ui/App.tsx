@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ToastHost } from "./CopyCode";
 import { LocalGame } from "./LocalGame";
 import { OnlineApp } from "./online/OnlineApp";
 import type { OnlineIntent } from "./online/intent";
@@ -19,7 +20,7 @@ export default function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
   // A first visit gets a funny name and a colour, so joining never asks for anything.
   const [profile, setProfile] = useState(loadProfile);
-  // An invite link (?room=CODE) opens straight into that room.
+  // A room link (?room=CODE) opens straight into that room.
   const [online, setOnline] = useState<Online | null>(() => {
     const code = roomFromUrl();
     return code ? attempt({ type: "join", code }) : null;
@@ -34,23 +35,28 @@ export default function App() {
     setOnline(null);
   };
 
-  if (online) {
-    return (
-      <OnlineApp
-        key={online.attempt}
-        intent={online.intent}
-        settings={settings}
-        onSettings={updateSettings}
-        profile={profile}
-        onProfile={(next) => {
-          setProfile(next);
-          saveProfile(next);
-        }}
-        onLeave={goOffline}
-        onRetry={() => setOnline(attempt(online.intent))}
-      />
-    );
-  }
+  const screen = online ? (
+    <OnlineApp
+      key={online.attempt}
+      intent={online.intent}
+      settings={settings}
+      onSettings={updateSettings}
+      profile={profile}
+      onProfile={(next) => {
+        setProfile(next);
+        saveProfile(next);
+      }}
+      onLeave={goOffline}
+      onRetry={() => setOnline(attempt(online.intent))}
+    />
+  ) : (
+    <LocalGame settings={settings} onSettings={updateSettings} onOnline={(intent) => setOnline(attempt(intent))} />
+  );
 
-  return <LocalGame settings={settings} onSettings={updateSettings} onOnline={(intent) => setOnline(attempt(intent))} />;
+  return (
+    <>
+      <ToastHost />
+      {screen}
+    </>
+  );
 }

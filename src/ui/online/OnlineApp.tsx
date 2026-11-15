@@ -1,13 +1,15 @@
 import { type ReactNode, useState } from "react";
 import { type Profile, type RoomInfo, formatRoomCode } from "../../net/protocol";
+import { CopyCode } from "../CopyCode";
 import { GameScreen } from "../GameScreen";
 import { Logo } from "../Logo";
-import { BombRow, BotLevelRow, MenuDialog, type MenuTab, PersonalRows, RulesTab } from "../Menu";
+import { BombRow, BotLevelRow, MenuDialog, type MenuTab, PersonalRows } from "../Menu";
 import { ProfileEditor } from "../ProfileEditor";
 import { PlayersContext, playersFromRoom } from "../players";
+import { RulesDialog } from "../Rules";
 import { BOT_TIMING, type Settings, rulesFromSettings } from "../settings";
 import type { OnlineIntent } from "./intent";
-import { InviteRow, SeatList, StartControls } from "./parts";
+import { SeatList } from "./parts";
 import { type RoomHandle, useRoom } from "./useRoom";
 
 interface Props {
@@ -28,6 +30,7 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
   const [prefs] = useState(() => ({ rules: rulesFromSettings(settings), botLevel: settings.botLevel }));
   const handle = useRoom(intent, profile, prefs, BOT_TIMING[settings.botSpeed]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const { room, seat, presenter, status } = handle;
 
   const leave = async () => {
@@ -82,7 +85,6 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
         />
       ),
     },
-    { id: "rules", label: "Rules", content: <RulesTab rules={room.settings.rules} /> },
     {
       id: "settings",
       label: "Settings",
@@ -122,17 +124,15 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
         dealCode={room.dealCode}
         onMove={handle.move}
         onOpenMenu={() => setMenuOpen(true)}
-        headerCenter={formatRoomCode(room.code)}
+        onOpenRules={() => setRulesOpen(true)}
+        headerCenter={<CopyCode text={formatRoomCode(room.code)} label="Room code" />}
         gameOverActions={
           room.phase !== "over" ? (
             <p role="status">Starting…</p>
           ) : isHost ? (
-            <>
-              <StartControls label="Start next game" onStart={handle.start} />
-              <button type="button" onClick={() => handle.start(room.dealCode ?? undefined)}>
-                Replay this deal
-              </button>
-            </>
+            <button type="button" className="primary" onClick={handle.start} autoFocus>
+              Start next game
+            </button>
           ) : (
             <p role="status" data-testid="waiting">
               Waiting for {hostName} to start the next game…
@@ -141,6 +141,7 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
         }
       >
         {menu}
+        {rulesOpen && <RulesDialog rules={room.settings.rules} onClose={() => setRulesOpen(false)} />}
       </GameScreen>
     </PlayersContext.Provider>
   );
@@ -175,8 +176,11 @@ function OnlineTab({
 }) {
   return (
     <div className="menu-body">
+      <div className="room-code-row">
+        <span className="code-label">Room code</span>
+        <CopyCode text={formatRoomCode(room.code)} label="Room code" className="room-code-big" testId="menu-room-code" />
+      </div>
       <ProfileEditor profile={profile} onSubmit={onProfile} />
-      <InviteRow code={room.code} />
       <SeatList room={room} me={seat} />
       <div className="menu-actions">
         <button type="button" onClick={onLeave}>

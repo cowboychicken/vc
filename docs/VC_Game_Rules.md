@@ -54,9 +54,9 @@ The setting takes effect immediately, including on the deal in progress, and car
 - **Passing:** you cannot pass when leading. A player who passes is locked out until the table is cleared.
 - **Clearing the table:** when every other player has passed, the last player to play wins the round, the table clears, and they lead.
 - **Turn order:** seats 0 to 3, skipping players who have passed.
-- **Replay:** after a game, either start a new deal (the winner leads) or replay the same deal from the same seed.
-- **Online rooms:** the host starts each game. The first game follows the rule above (3♠ holder opens); every later game is led by the previous winner, unless the host starts one from a deal code, which fixes the deal and the leader exactly. A bot covers any seat whose human is away or has left. The house rule can only be changed between games.
-- **Deal code:** every deal has a short code (seed plus who leads) that reproduces it exactly. House rules are a separate setting and are not in the code.
+- **Replay (single player only):** after a game, either start a new deal (the winner leads) or replay the same deal from the same seed.
+- **Online rooms:** the host starts each game. The first game follows the rule above (3♠ holder opens); every later game is led by the previous winner. Online deals are always random: nobody can replay a deal or pick one with a deal code. A bot covers any seat whose human is away or has left. The house rule can only be changed between games.
+- **Deal code:** every deal has a short code (seed plus who leads) that reproduces it exactly. In single player you can type one in to play that deal; online it is shown for reference only. House rules are a separate setting and are not in the code.
 
 ## 6. Winning
 

@@ -165,7 +165,9 @@ export function createApi(options: ApiOptions = {}): Api {
         break;
       }
       case "start": {
-        manager.start(code, token, typeof body.dealCode === "string" ? body.dealCode : undefined);
+        // Online deals are always random: a client can't pick or replay a deal.
+        if (body.dealCode !== undefined) throw new RoomError(400, "bad_request", "Online games can't use a deal code.");
+        manager.start(code, token);
         break;
       }
       case "settings": {

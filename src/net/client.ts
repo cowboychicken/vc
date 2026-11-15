@@ -80,8 +80,8 @@ export const getUpdates = (
 export const sendMove = (code: string, token: string, move: Move, since: number) =>
   request<UpdateResponse>("POST", room(code, "move"), { token, body: { move, since } satisfies MoveRequest });
 
-export const startGame = (code: string, token: string, since: number, dealCode?: string) =>
-  request<UpdateResponse>("POST", room(code, "start"), { token, body: { since, dealCode } satisfies StartRequest });
+export const startGame = (code: string, token: string, since: number) =>
+  request<UpdateResponse>("POST", room(code, "start"), { token, body: { since } satisfies StartRequest });
 
 export const sendSettings = (
   code: string,

@@ -26,14 +26,6 @@ export function roomFromUrl(search: string = window.location.search): string | n
   return normalizeRoomCode(new URLSearchParams(search).get("room"));
 }
 
-export function roomUrl(code: string): string {
-  const url = new URL(window.location.href);
-  url.search = "";
-  url.hash = "";
-  url.searchParams.set("room", code);
-  return url.toString();
-}
-
 /** Replaces the address bar without adding a history entry. */
 export function setAddress(search: string): void {
   const url = new URL(window.location.href);

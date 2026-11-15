@@ -34,6 +34,7 @@ interface Props {
   dealCode: string | null;
   onMove: (move: Move) => void;
   onOpenMenu: () => void;
+  onOpenRules: () => void;
   /** Shown in the middle of the header, like an online room's code. */
   headerCenter?: ReactNode;
   /** What the player can do once the game is over. */
@@ -50,6 +51,7 @@ export function GameScreen({
   dealCode,
   onMove,
   onOpenMenu,
+  onOpenRules,
   headerCenter,
   gameOverActions,
   children,
@@ -152,7 +154,17 @@ export function GameScreen({
           <button
             type="button"
             className="icon-btn"
-            aria-label="Menu, rules and settings"
+            aria-label="Rules"
+            aria-haspopup="dialog"
+            title="Rules"
+            onClick={onOpenRules}
+          >
+            ?
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Menu and settings"
             aria-haspopup="dialog"
             onClick={onOpenMenu}
           >

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { INSTANT_WIN_LABELS, type HistoryEntry, type PlayerView, cardsLabel, describeCombo } from "../engine";
+import { INSTANT_WIN_LABELS, type HistoryEntry, type PlayerView, cardsLabel, describeCombo, winningPlay } from "../engine";
 import { CardFace } from "./CardFace";
+import { CopyCode } from "./CopyCode";
 import { Name, nameOf, relSeat, usePlayers } from "./players";
 
 const POSITIONS = ["bottom", "left", "top", "right"] as const;
@@ -112,24 +113,27 @@ export function GameOver({ view, dealCode, actions }: GameOverProps) {
         )}
         {dealCode && (
           <p className="note deal-code">
-            Deal code <b>{dealCode}</b>
+            Deal code <CopyCode text={dealCode} label="Deal code" className="inline" testId="deal-code" />
           </p>
         )}
         <div className="reveal">
-          {view.revealed?.map((hand, seat) =>
-            hand.length === 0 || seat === players.me ? null : (
+          {view.revealed?.map((held, seat) => {
+            const isWinner = seat === winner;
+            const cards = isWinner ? winningPlay(view) : held;
+            return cards.length === 0 || (seat === players.me && !isWinner) ? null : (
               <div key={seat} className="reveal-row">
                 <span className="reveal-name">
                   <Name seat={seat} />
+                  {isWinner && <span className="reveal-note">(winning hand)</span>}
                 </span>
                 <span className="reveal-cards">
-                  {hand.map((c) => (
+                  {cards.map((c) => (
                     <CardFace key={c} card={c} small />
                   ))}
                 </span>
               </div>
-            ),
-          )}
+            );
+          })}
         </div>
         <div className="dialog-actions">{actions}</div>
       </div>

@@ -9,6 +9,7 @@ import {
   newGame,
   type RuleOptions,
   viewFor,
+  winningPlay,
 } from "../src/engine";
 import { cs } from "./helpers";
 
@@ -184,5 +185,29 @@ describe("privacy", () => {
     expect(Object.keys(view)).not.toContain("hands");
     const done = setup(["5♠", "6♠", "7♠", "8♠"]);
     expect(viewFor(play(done, "5♠"), 1).revealed).toEqual([[], cs("6♠"), cs("7♠"), cs("8♠")]);
+  });
+});
+
+describe("winning play", () => {
+  it("is empty until someone wins", () => {
+    expect(winningPlay(viewFor(setup(["5♠ 6♠", "7♠", "8♠", "9♠"]), 0))).toEqual([]);
+  });
+
+  it("is the winner's last play, not their earlier ones or anyone else's", () => {
+    let s = setup(["5♠ 9♠", "6♠ 3♣", "7♠ 4♣", "8♠ 5♣"]);
+    s = play(s, "5♠");
+    s = play(s, "6♠"); // seat 1
+    s = pass(s); // seat 2
+    s = play(s, "8♠"); // seat 3
+    s = play(s, "9♠"); // seat 0 goes out
+    expect(s.winner).toBe(0);
+    expect(winningPlay(viewFor(s, 2))).toEqual(cs("9♠"));
+  });
+
+  it("is the dealt hand after an instant win", () => {
+    let seed = 0;
+    while (newGame({ seed }).winner === null) seed++;
+    const s = newGame({ seed });
+    expect(winningPlay(viewFor(s, 0))).toEqual(s.hands[s.winner!]);
   });
 });

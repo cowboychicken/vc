@@ -34,6 +34,8 @@ describe("palette", () => {
 
   it("only accepts known colour ids, and maps them to hex", () => {
     expect(isColorId("red")).toBe(true);
+    expect(isColorId("white")).toBe(false);
+    expect(PALETTE.some((c) => c.hex.toLowerCase() === "#ffffff")).toBe(false);
     expect(isColorId("#ff0000")).toBe(false);
     expect(isColorId("red; background:url(x)")).toBe(false);
     expect(isColorId(undefined)).toBe(false);
