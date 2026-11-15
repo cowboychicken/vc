@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { type Profile, type RoomInfo, formatRoomCode } from "../../net/protocol";
 import { CopyCode } from "../CopyCode";
 import { GameScreen } from "../GameScreen";
@@ -35,6 +35,9 @@ export function OnlineApp({ intent, settings, onToggleDarkMode, onSettings, prof
   const [menuOpen, setMenuOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const { room, seat, presenter, status } = handle;
+  // The server says how long is left as of its answer, so fix the deadline when the answer arrives. The clock
+  // itself only mounts later, once earlier moves have played out, and would otherwise run late by that long.
+  const turnEndsAt = useMemo(() => Date.now() + (room?.turn?.endsInMs ?? 0), [room]);
 
   const leave = async () => {
     await handle.leave();
@@ -146,7 +149,7 @@ export function OnlineApp({ intent, settings, onToggleDarkMode, onSettings, prof
         playbackPending={presenter.pending.length > 0}
         dealCode={room.dealCode}
         onToggleDarkMode={onToggleDarkMode}
-        turnClock={<TurnClock room={room} seat={seat} />}
+        turnClock={<TurnClock room={room} seat={seat} endsAt={turnEndsAt} />}
         onMove={handle.move}
         onOpenMenu={() => setMenuOpen(true)}
         onOpenRules={() => setRulesOpen(true)}

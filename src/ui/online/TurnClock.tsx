@@ -1,15 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { RoomInfo } from "../../net/protocol";
 
+/** The countdown stays hidden until this many seconds are left. */
+const VISIBLE_SECONDS = 10;
+
 /** Counts down the seconds a player has left to move. The server decides when time is really up. */
-function Countdown({ endsAt, limitMs }: { endsAt: number; limitMs: number }) {
+function Countdown({ endsAt }: { endsAt: number }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(id);
   }, []);
-  // The server adds a little allowance for playback; showing at most the nominal limit hides it.
-  const seconds = Math.ceil(Math.min(limitMs, Math.max(0, endsAt - now)) / 1000);
+  // The real time left, including the server's playback allowance, shown only for the last few seconds.
+  const seconds = Math.ceil(Math.max(0, endsAt - now) / 1000);
+  if (seconds > VISIBLE_SECONDS) return null;
   return (
     <span className={`turn-clock${seconds <= 5 ? " urgent" : ""}`} aria-hidden="true">
       {" "}
@@ -19,11 +23,9 @@ function Countdown({ endsAt, limitMs }: { endsAt: number; limitMs: number }) {
 }
 
 /** The countdown for my own turn, or nothing when no human turn of mine is being timed. */
-export function TurnClock({ room, seat }: { room: RoomInfo; seat: number }) {
-  // Each response says how long is left at that moment, so the deadline is fixed when it arrives.
-  const endsAt = useMemo(() => Date.now() + (room.turn?.endsInMs ?? 0), [room]);
+export function TurnClock({ room, seat, endsAt }: { room: RoomInfo; seat: number; endsAt: number }) {
   if (!room.turn || room.turn.seat !== seat) return null;
-  return <Countdown endsAt={endsAt} limitMs={room.turn.limitMs} />;
+  return <Countdown endsAt={endsAt} />;
 }
 
 /** Tells a player when a turn ran out and a bot played for them, and how close they are to losing the seat. */
