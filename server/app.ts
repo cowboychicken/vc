@@ -87,7 +87,7 @@ export function createApi(options: ApiOptions = {}): Api {
   const manager = options.manager ?? new RoomManager({ now });
   const maxWaitMs = options.maxWaitMs ?? 25_000;
   const creates = new RateLimiter(options.createLimit ?? 20, 10 * 60_000, now);
-  const sweepMs = options.sweepMs ?? 5_000;
+  const sweepMs = options.sweepMs ?? 1_000;
   const timer =
     sweepMs > 0
       ? setInterval(() => {

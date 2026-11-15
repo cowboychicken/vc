@@ -2,7 +2,7 @@ import type { BotLevel } from "../bots";
 import { DECK_SIZE, type Move, type PlayerView, type RuleOptions } from "../engine";
 
 /** Bump when the wire format or game rules change in a way an old page can't cope with. */
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 export const VERSION_HEADER = "x-vc13-version";
 
 export const NUM_SEATS = 4;
@@ -87,6 +87,17 @@ export interface SeatInfo {
   /** A human who has not been heard from recently; a bot plays for them until they are back. */
   away: boolean;
   host: boolean;
+  /** Turns this player has let run out in this room; at the limit they lose the seat. */
+  strikes: number;
+}
+
+/** The human turn being timed. A bot plays for them when it runs out. */
+export interface TurnInfo {
+  seat: number;
+  /** Time left on the server's clock when this response was made, including a short allowance for playback. */
+  endsInMs: number;
+  /** The nominal time per turn, which is what a countdown should start from. */
+  limitMs: number;
 }
 
 export interface RoomPlayerStats {
@@ -118,6 +129,10 @@ export interface RoomInfo {
   playerStats: RoomPlayerStats[];
   /** Deal code of the current or last game. For reference only: online play never loads a deal from a code. */
   dealCode: string | null;
+  /** Whose turn is being timed, or null when a bot is up, nobody is playing or the seat is away. */
+  turn: TurnInfo | null;
+  /** Timed-out turns a player may have before losing the seat. */
+  maxStrikes: number;
 }
 
 /** One step of a game. The view is already trimmed to what the receiving seat may see. */

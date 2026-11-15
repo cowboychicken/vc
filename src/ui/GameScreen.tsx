@@ -42,6 +42,8 @@ interface Props {
   onOpenMenu: () => void;
   onOpenRules: () => void;
   onToggleDarkMode?: () => void;
+  /** A countdown shown next to the status while it is my turn. */
+  turnClock?: ReactNode;
   /** Shown in the middle of the header, like an online room's code. */
   headerCenter?: ReactNode;
   /** What the player can do once the game is over. */
@@ -64,6 +66,7 @@ export function GameScreen({
   onOpenMenu,
   onOpenRules,
   onToggleDarkMode,
+  turnClock,
   headerCenter,
   gameOverActions,
   children,
@@ -223,6 +226,7 @@ export function GameScreen({
       <section className={`player${myTurn ? " active" : ""}`} aria-label="Your hand">
         <p className={`status ${tone}`} role="status" data-testid="status">
           {status}
+          {myTurn && turnClock}
         </p>
         <div className="hand" data-testid="hand">
           {displayedView.hand.map((c) => (

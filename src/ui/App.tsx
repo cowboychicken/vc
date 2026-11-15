@@ -18,7 +18,7 @@ const attempt = (intent: OnlineIntent): Online => ({ intent, attempt: ++attempts
 
 export default function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings);
-  const [darkMode, setDarkMode] = useState(false);
+  const darkMode = settings.darkMode;
   useEffect(() => {
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", darkMode ? "#111111" : "#ffffff");
   }, [darkMode]);
@@ -33,6 +33,7 @@ export default function App() {
     setSettings(next);
     saveSettings(next);
   };
+  const toggleDarkMode = () => updateSettings({ ...settings, darkMode: !settings.darkMode });
   const goHome = () => {
     setAddress("");
     setOnline(null);
@@ -43,7 +44,7 @@ export default function App() {
       key={online.attempt}
       intent={online.intent}
       settings={settings}
-      onToggleDarkMode={() => setDarkMode((value) => !value)}
+      onToggleDarkMode={toggleDarkMode}
       onSettings={updateSettings}
       profile={profile}
       onProfile={(next) => {
@@ -55,7 +56,7 @@ export default function App() {
     />
   ) : (
     <LandingPage
-      onToggleDarkMode={() => setDarkMode((value) => !value)}
+      onToggleDarkMode={toggleDarkMode}
       onQuickPlay={() => setOnline(attempt({ type: "quickplay" }))}
       onCreateRoom={() => setOnline(attempt({ type: "create" }))}
       onJoinRoom={(code) => setOnline(attempt({ type: "join", code }))}

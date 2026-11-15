@@ -1,9 +1,10 @@
+const TAPS_TO_TOGGLE = 3;
 let taps = 0;
 let resetTimer: ReturnType<typeof setTimeout> | null = null;
 
 function registerTap(toggleDarkMode: () => void): void {
   if (resetTimer !== null) clearTimeout(resetTimer);
-  if (++taps === 5) {
+  if (++taps === TAPS_TO_TOGGLE) {
     taps = 0;
     resetTimer = null;
     toggleDarkMode();

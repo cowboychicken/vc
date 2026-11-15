@@ -11,6 +11,7 @@ import { BOT_TIMING, type Settings, rulesFromSettings } from "../settings";
 import type { OnlineIntent } from "./intent";
 import { SeatList } from "./parts";
 import { RoomStats } from "./RoomStats";
+import { StrikeNotice, TurnClock } from "./TurnClock";
 import { type RoomHandle, useRoom } from "./useRoom";
 
 interface Props {
@@ -128,6 +129,7 @@ export function OnlineApp({ intent, settings, onToggleDarkMode, onSettings, prof
           Reconnecting…
         </div>
       )}
+      <StrikeNotice room={room} seat={seat} />
       {handle.notice && (
         <div className="toast" role="alert">
           {handle.notice}
@@ -144,6 +146,7 @@ export function OnlineApp({ intent, settings, onToggleDarkMode, onSettings, prof
         playbackPending={presenter.pending.length > 0}
         dealCode={room.dealCode}
         onToggleDarkMode={onToggleDarkMode}
+        turnClock={<TurnClock room={room} seat={seat} />}
         onMove={handle.move}
         onOpenMenu={() => setMenuOpen(true)}
         onOpenRules={() => setRulesOpen(true)}
@@ -262,7 +265,7 @@ function SettingsTab({
       </p>
 
       <PersonalRows settings={settings} onSettings={onSettings} />
-      <p className="note">Speed, hints and the move log are saved on this device.</p>
+      <p className="note">Speed, hints, the move log and dark mode are saved on this device.</p>
     </div>
   );
 }

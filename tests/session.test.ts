@@ -158,11 +158,11 @@ describe("settings", () => {
   it("falls back to defaults for missing or invalid stored values", () => {
     expect(parseSettings(null)).toEqual(DEFAULT_SETTINGS);
     expect(parseSettings("not json")).toEqual(DEFAULT_SETTINGS);
-    expect(parseSettings(JSON.stringify({ botSpeed: "warp", botLevel: 3, hints: "yes" }))).toEqual(DEFAULT_SETTINGS);
+    expect(parseSettings(JSON.stringify({ botSpeed: "warp", botLevel: 3, hints: "yes", darkMode: 1 }))).toEqual(DEFAULT_SETTINGS);
   });
 
   it("keeps valid stored values", () => {
-    const stored = { botSpeed: "fast", botLevel: "easy", hints: false, moveLog: false, bombsBeatAnything: true };
+    const stored = { botSpeed: "fast", botLevel: "easy", hints: false, moveLog: false, darkMode: true, bombsBeatAnything: true };
     expect(parseSettings(JSON.stringify(stored))).toEqual(stored);
   });
 });

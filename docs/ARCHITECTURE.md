@@ -67,9 +67,10 @@ App ─┬─ LandingPage
 - **`turnShown`** exists so a bot's seat lights up *before* its card lands. `LocalGame` does this with a two-step timer. Online, the presenter drives it (section 6).
 - **Landing page.** `LandingPage.tsx` offers multiplayer Quick Play, room creation and joining by code. Quick Play joins a random room with a present human and bot seat, or creates and starts a room if none qualifies. The page includes readable game/rules text; `index.html` provides crawlable fallback text, title/description, social metadata and JSON-LD, while `public/robots.txt` and `public/sitemap.xml` serve crawlers.
 - **`Menu.tsx`** is a generic tabbed dialog plus reusable rows (`BombRow`, `BotLevelRow`, `PersonalRows`). In online play, only the host can change room rules or bot level; personal settings remain available to each player. `LocalGame` and `OnlineApp` assemble their own tabs, but only `OnlineApp` is reachable from `App`.
-- **Settings and storage** (`settings.ts`, `profile.ts`, `online/seats.ts`) are small wrappers around `localStorage`, each tolerant of storage being blocked or corrupt. Keys: `vc13.settings`, `vc13.profile`, `vc13.rooms`.
+- **Settings and storage** (`settings.ts`, `profile.ts`, `online/seats.ts`) are small wrappers around `localStorage`, each tolerant of storage being blocked or corrupt. Keys: `vc13.settings` (speed, hints, move log, dark mode and the unused local-game options), `vc13.profile`, `vc13.rooms`.
 - **URLs** (`url.ts`): the public app reads `?room=ABC234` to open an online room. Deal-code parsing remains for the local-game module, which is not linked from the public app flow.
-- **Theme easter egg.** The logo smile appears after three seconds of hover/focus. Five quick taps on the logo toggle the app's dark theme.
+- **Dark mode.** `Settings.darkMode` (default off) is applied by `App` as a `theme-dark` class on its wrapper, plus the `theme-color` meta tag. The Settings tab row and the three-quick-tap logo egg both write the same saved setting, so the choice survives reloads. The landing page has no menu, so the logo egg is its only toggle. The logo smile appears after three seconds of hover/focus.
+- **Turn clock.** `online/TurnClock.tsx` shows `· Ns` next to the status line while it is my turn (capped at the nominal limit, which hides the server's playback allowance) and a toast when a strike is added (`StrikeNotice`). Both only read `RoomInfo`; the server decides when time is up.
 - **Responsive layout:** `styles.css` and `game-presentation.css`, with a phone layout under 700 px (a square table with the top opponent just above it).
 
 ## 5. Online play: the model
@@ -116,6 +117,7 @@ Types, validators, name/colour rules and room-code handling are all in `src/net/
 - **Who leads:** the first game opens with the 3♠ holder. Later games are led by the previous winner. The deal is always random: online play never loads a deal from a code (`RoomManager.start` takes an optional deal code only so tests can fix a deal; the HTTP layer never passes one).
 - **Bots run on the server.** After every human action the server plays all consecutive bot turns (`advanceBots`) and stops at a present human or the end of the game. The client is shown them as separate frames, flagged `bot: true`.
 - **Away takeover.** A human not heard from for 45 s is marked *away* and a bot plays their turns. They resume the moment they poll again.
+- **Turn timer and strikes.** When a present human becomes the one to move, the server arms a deadline of `turnMs` (15 s) plus `turnGraceMs` (4 s, so the client's playback of earlier moves doesn't eat into the player's time). `sweep` (every second) checks it. On timeout a bot plays that move (the frame is flagged `bot: true`) and the seat gains a *strike*. At `maxStrikes` (3) the seat becomes a bot, the token is added to `kickedTokens` as `idle` (its saved token gets `403` with its own message), and the host role moves on if needed. If no humans remain, the room is deleted. Strikes live on the seat, so leaving or being replaced resets them, and a move does not clear them. The bots cover away players first in `sweep`, so away players get no strikes. `RoomInfo` carries `turn` (`seat`, `endsInMs`, `limitMs`), `maxStrikes` and each seat's `strikes`.
 - **Host handover.** If the host leaves, or is away, the host role moves to the lowest-numbered present human. It does not move back when the old host returns (unless the new one also goes away).
 - **Expiry.** A room is deleted when its last human leaves, or after 30 minutes with nobody present. At most 200 rooms exist at once.
 
@@ -144,7 +146,7 @@ Resilience built into the loop:
 | File | Role |
 | --- | --- |
 | `rooms.ts` | `RoomManager`: every rule of the room model above. It has no HTTP in it and takes injectable `now`, `randomInt` and `randomToken`, which is why it is tested with a fake clock. |
-| `app.ts` | `createApi`: routing, the version check, body limit (4 KB), per-IP create rate limit (20 per 10 min), the long poll (wakes on `subscribe` notifications), error mapping, and a 5 s housekeeping `sweep`. |
+| `app.ts` | `createApi`: routing, the version check, body limit (4 KB), per-IP create rate limit (20 per 10 min), the long poll (wakes on `subscribe` notifications), error mapping, and a 1 s housekeeping `sweep` (away flags, host handover, bots covering away players, turn timeouts, room expiry). |
 | `static.ts` | Serves `dist/` with path-traversal protection and an SPA fallback to `index.html`. |
 | `limits.ts` | A sliding-window `RateLimiter`. |
 | `index.ts` | Production entry point: reads env, creates the HTTP server, handles `SIGTERM`/`SIGINT` (closes idle connections, cuts long polls after 3 s). |
@@ -184,7 +186,7 @@ Things to remember when hosting:
 | `dealCode.test.ts` | Round trips, typo rejection, forgiving input. |
 | `session.test.ts` | The single-player reducer. |
 | `protocol.test.ts` | Names, colours, room codes, validators. |
-| `rooms.test.ts` | The whole room model with a fake clock: join, leave, Quick Play matching, host kick, host handover, away takeover, settings, start, expiry, hidden hands per seat, long-poll subscriptions. |
+| `rooms.test.ts` | The whole room model with a fake clock: join, leave, Quick Play matching, host kick, host handover, away takeover, turn timer and strikes, settings, start, expiry, hidden hands per seat, long-poll subscriptions. |
 | `http.test.ts` | Real HTTP against an ephemeral server: routing, Quick Play and kick endpoints, version check, limits, long-poll wake-up, static serving, `robots.txt` and `sitemap.xml`. |
 | `presenter.test.ts` | Frame playback order and timing as pure data. |
 
@@ -192,7 +194,7 @@ There is no component-test harness. UI behaviour was checked in a real browser: 
 
 Not covered by automated tests (checked by hand, or not at all):
 
-- **Five-tap dark mode and the three-second logo smile** (`Logo.tsx`, `.theme-dark` in `styles.css`). The toggle and the smile delay were checked in a browser on the landing page; the dark theme was not reviewed on every screen (end-of-game dialog, menu, room stats).
+- **Three-tap dark mode and the three-second logo smile** (`Logo.tsx`, `.theme-dark` in `styles.css`). The toggle and the smile delay were checked in a browser on the landing page; the dark theme was not reviewed on every screen (end-of-game dialog, menu, room stats).
 - **Host-only room settings.** Guests see the bomb and bot-level controls disabled (`SettingsTab` in `OnlineApp.tsx`). The server enforces this with `403` (tested in `rooms.test.ts`), but the disabled UI is only checked by reading the code.
 - **Landing page, Quick Play button flow and the kicked-player message.** The server side is tested; the client behaviour (`LandingPage.tsx`, `useRoom.ts`) is not.
 - **Search metadata.** Tests check that `robots.txt` and `sitemap.xml` are served, not that `index.html` metadata or the crawlable text stays in step with the landing page.
@@ -212,6 +214,8 @@ Not covered by automated tests (checked by hand, or not at all):
 - No scoring across games beyond a win count per seat, and no chop payments (Miền Bắc and other variants would go behind the `rules.ts` seam).
 - A trained bot (see `docs/AI_RL_Environment.md` for early notes) would plug in through the `Bot` interface and `BOT_BY_LEVEL`; it needs no server changes.
 - If the server ever needs to scale beyond one process, rooms would need sticky routing or a shared store.
-- A kick can't be made permanent: with no accounts, a kicked player can rejoin with a fresh identity.
+- A kick can't be made permanent: with no accounts, a kicked player can rejoin with a fresh identity. The same goes for a player removed after three strikes.
+- A solo player removed for running out of time sees "That room doesn't exist any more." because the room is deleted with them. The removed-for-time message only shows when other people are still in the room.
+- The turn timer is a flat 15 s with a 4 s allowance (`ManagerOptions`: `turnMs`, `turnGraceMs`, `maxStrikes`); it is not a room setting. A player who is slow only because of a very slow connection can still be timed out.
 - Single-player mode is hidden, not removed (`LocalGame.tsx` and its tests remain). Bringing it back means linking it from `App.tsx` and `LandingPage.tsx`.
 - UI behaviour has no automated tests (see section 9). A component-test harness would be the first step if the UI grows further, starting with the logo tap logic and the host-only settings.

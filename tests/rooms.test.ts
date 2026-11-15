@@ -423,6 +423,116 @@ describe("leaving", () => {
   });
 });
 
+describe("turn timer", () => {
+  const timed = () => setup({ turnMs: 10_000, turnGraceMs: 0, awayMs: 1e9 });
+  const idle = (clock: { t: number }, manager: RoomManager) => {
+    clock.t += 10_001;
+    manager.sweep();
+  };
+
+  it("has a bot play for a human who runs out of time, and counts a strike without taking the seat", () => {
+    const { manager, clock } = timed();
+    const { code, token } = manager.create(ann);
+    manager.start(code, token, encodeDeal({ seed: HOST_OPENS }));
+    const before = manager.update(code, token, -1);
+    expect(before.room.turn).toMatchObject({ seat: 0, endsInMs: 10_000, limitMs: 10_000 });
+
+    clock.t += 9_000;
+    manager.sweep();
+    expect(manager.update(code, token, -1).room.seats[0]!.strikes).toBe(0);
+
+    idle(clock, manager);
+    const after = manager.update(code, token, -1);
+    expect(after.room.seats[0]).toMatchObject({ kind: "human", strikes: 1 });
+    expect(after.frames.find((f) => f.by === 0 && f.n > before.frames.length - 1)?.bot).toBe(true);
+    expect(after.room.turn).toMatchObject({ seat: 0, endsInMs: 10_000 }); // a fresh clock for the next turn
+  });
+
+  it("restarts the clock whenever the player moves in time", () => {
+    const { manager, clock } = timed();
+    const { code, token } = manager.create(ann);
+    manager.start(code, token, encodeDeal({ seed: HOST_OPENS }));
+    for (let i = 0; i < 4; i++) {
+      clock.t += 9_000;
+      manager.sweep();
+      playFirstLegal(manager, code, token);
+      if (manager.update(code, token, -1).room.phase !== "playing") break;
+    }
+    expect(manager.update(code, token, -1).room.seats[0]!.strikes).toBe(0);
+  });
+
+  it("takes the seat on the third strike and refuses the player's old token", () => {
+    const { manager, clock } = timed();
+    const { code, token } = manager.create(ann);
+    const guest = manager.join(code, bo);
+    manager.start(code, token, encodeDeal({ seed: HOST_OPENS }));
+    playFirstLegal(manager, code, token);
+    // The guest is up (bots played in between); let them time out three times.
+    const guestTurn = () => manager.update(code, guest.token, -1).room.turn?.seat === 1;
+    for (let strikes = 1; strikes <= 3; strikes++) {
+      expect(guestTurn()).toBe(true);
+      idle(clock, manager);
+      if (strikes < 3) {
+        expect(manager.update(code, token, -1).room.seats[1]).toMatchObject({ kind: "human", strikes });
+        playFirstLegal(manager, code, token);
+      }
+    }
+    const room = manager.update(code, token, -1).room;
+    expect(room.seats[1]).toMatchObject({ kind: "bot", strikes: 0 });
+    expectError(() => manager.update(code, guest.token, -1), 401);
+    expectError(() => manager.join(code, bo, guest.token), 403);
+  });
+
+  it("deletes the room when the only human is removed for running out of time", () => {
+    const { manager, clock } = timed();
+    const { code, token } = manager.create(ann);
+    manager.start(code, token, encodeDeal({ seed: HOST_OPENS }));
+    for (let i = 0; i < 3; i++) idle(clock, manager);
+    expect(manager.peek(code)).toBeNull();
+    expectError(() => manager.update(code, token, -1), 404);
+  });
+
+  it("hands the host role on when the host is removed", () => {
+    const { manager, clock } = timed();
+    const { code, token } = manager.create(ann);
+    const guest = manager.join(code, bo);
+    manager.start(code, token, encodeDeal({ seed: HOST_OPENS }));
+    for (let i = 0; i < 3; i++) {
+      idle(clock, manager);
+      // Keep the guest from timing out themselves while the host is the one running out of time.
+      if (manager.update(code, guest.token, -1).room.turn?.seat === 1) playFirstLegal(manager, code, guest.token);
+    }
+    const room = manager.update(code, guest.token, -1).room;
+    expect(room.seats[0]!.kind).toBe("bot");
+    expect(room.host).toBe(1);
+  });
+
+  it("starts the strike count again after leaving the room", () => {
+    const { manager, clock } = timed();
+    const { code, token } = manager.create(ann);
+    const guest = manager.join(code, bo);
+    manager.start(code, token, encodeDeal({ seed: HOST_OPENS }));
+    playFirstLegal(manager, code, token);
+    idle(clock, manager);
+    expect(manager.update(code, token, -1).room.seats[1]!.strikes).toBe(1);
+    manager.leave(code, guest.token);
+    const back = manager.join(code, bo, guest.token);
+    expect(manager.update(code, back.token, -1).room.seats[manager.update(code, back.token, -1).seat]!.strikes).toBe(0);
+  });
+
+  it("doesn't count strikes against an away player, whom a bot already covers", () => {
+    const { manager, clock } = setup({ turnMs: 10_000, turnGraceMs: 0, awayMs: 5_000 });
+    const { code, token } = manager.create(ann);
+    const guest = manager.join(code, bo);
+    manager.start(code, token, encodeDeal({ seed: HOST_OPENS }));
+    clock.t += 20_000;
+    manager.update(code, guest.token, -1); // only the guest is heard from
+    manager.sweep();
+    const room = manager.update(code, guest.token, -1).room;
+    expect(room.seats[0]).toMatchObject({ kind: "human", away: true, strikes: 0 });
+  });
+});
+
 describe("room player stats", () => {
   it("keeps wins with players rather than seats, including after leaving, returning and renaming", () => {
     const { manager } = setup();

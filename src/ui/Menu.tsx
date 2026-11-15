@@ -350,6 +350,12 @@ export function PersonalRows({
         options={ON_OFF}
         onChange={(v) => set("moveLog", v === "on")}
       />
+      <Segmented
+        label="Dark mode"
+        value={settings.darkMode ? "on" : "off"}
+        options={ON_OFF}
+        onChange={(v) => set("darkMode", v === "on")}
+      />
     </>
   );
 }

@@ -9,6 +9,7 @@ export interface Settings {
   botLevel: BotLevel;
   hints: boolean;
   moveLog: boolean;
+  darkMode: boolean;
   bombsBeatAnything: boolean;
 }
 
@@ -17,6 +18,7 @@ export const DEFAULT_SETTINGS: Settings = {
   botLevel: "normal",
   hints: true,
   moveLog: true,
+  darkMode: false,
   bombsBeatAnything: true,
 };
 
@@ -50,6 +52,7 @@ export function parseSettings(raw: string | null): Settings {
     botLevel: data.botLevel === "easy" || data.botLevel === "normal" ? data.botLevel : DEFAULT_SETTINGS.botLevel,
     hints: typeof data.hints === "boolean" ? data.hints : DEFAULT_SETTINGS.hints,
     moveLog: typeof data.moveLog === "boolean" ? data.moveLog : DEFAULT_SETTINGS.moveLog,
+    darkMode: typeof data.darkMode === "boolean" ? data.darkMode : DEFAULT_SETTINGS.darkMode,
     bombsBeatAnything:
       typeof data.bombsBeatAnything === "boolean" ? data.bombsBeatAnything : DEFAULT_SETTINGS.bombsBeatAnything,
   };

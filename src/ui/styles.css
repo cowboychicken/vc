@@ -321,7 +321,8 @@ button.card:focus-visible {
   min-height: 1.4em;
   font-size: 0.9rem;
 }
-.status.warn {
+.status.warn,
+.turn-clock.urgent {
   font-weight: 700;
 }
 
@@ -424,12 +425,6 @@ button.card:focus-visible {
 .nm {
   font-weight: 700;
   overflow-wrap: anywhere;
-}
-
-/* Only coloured names (inline style) get a white chip; plain names are already white on black. */
-.opp.active .nm[style] {
-  background: #fff;
-  padding: 0 4px;
 }
 
 .profile {

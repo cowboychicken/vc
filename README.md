@@ -14,13 +14,15 @@ npm start          # serve the built app and the room API on http://localhost:30
 
 The landing page offers **Quick Play**, **Create Room**, and **Join Room** by code. Quick Play joins a random room with a present player and an open bot seat; if none is available, it creates and starts a room. Create Room starts a new game and gives you a code to share. Bots fill open seats. The public app currently offers multiplayer only.
 
-In a game, tap **?** for the rules and **i** for the menu. The **Online** tab shows the room code and players and lets you update your name and colour; the host can kick another player. In **Settings**, only the host can change the room rules or bot level (rules are locked during a game). Each player can change their own bot-animation speed, hints, and move log; those preferences are saved on that device.
+In a game, tap **?** for the rules and **i** for the menu. The **Online** tab shows the room code and players and lets you update your name and colour; the host can kick another player. In **Settings**, only the host can change the room rules or bot level (rules are locked during a game). Each player can change their own bot-animation speed, hints, move log and dark mode; those preferences are saved on that device.
 
 The room code is shown in the header and **Online** tab; tap it to copy. Friends can enter it on the landing page or open a `?room=ABC234` link to join. A joiner takes the next bot seat, even mid-game. If the host kicks someone, that seat becomes a bot and the kicked player's saved token is rejected; without accounts, they can still return as a new participant. Everyone gets a random funny name and colour. A player who drops out is covered by a bot until they return. The host starts each game, and the previous winner leads the next one.
 
 Online deals are random. The deal code shown at the end is for reference; the public app does not load or replay deals. Deal-code parsing and local single-player components remain in the source but are not exposed in the current app flow.
 
-Tap the logo five times quickly to toggle dark mode. The smiley appears after the logo has been hovered or focused for three seconds.
+**Turn timer.** You have 15 seconds to move. If time runs out, a bot plays that move for you and you get a strike. On your third strike in a room you lose your seat to a bot and can't take it back (the room says so if you try); leaving the room resets your strikes. If you were the only person in the room, the room is deleted. Players who are away are already covered by a bot and get no strikes. The countdown appears next to the status line on your turn.
+
+Dark mode is in **Settings**; tapping the logo three times quickly also toggles it. The smiley appears after the logo has been hovered or focused for three seconds.
 
 Tap or hover over your **Won** record online to see each participant's wins, games and win rate for that room. A completed game counts for everyone who occupied a seat during it; a win goes to whoever occupied the winning seat at the end, including a player covered by a bot while away. Stats survive leaving and returning on the same device while its room token is saved, as long as another human keeps the room alive; they disappear when the room closes or the server restarts.
 
