@@ -5,20 +5,20 @@ How the game is built, why, and where the sharp edges are. For commands and the 
 ## 1. The big picture
 
 ```
- browser (React)                                   Node server (optional, for online rooms)
- ───────────────                                   ────────────────────────────────────────
- LocalGame ──┐                                      app.ts  HTTP routes + long poll
-             ├─► GameScreen ─► Board                rooms.ts RoomManager (all the logic)
- OnlineApp ──┘      ▲                                  │  uses ▼
-   │ useRoom        │ PlayerView                   ┌──────────────────────────┐
-   │  └ presenter   │                              │ src/engine  (pure rules) │ ◄── same code
-   └ net/client ────┼── fetch / long poll ───────► │ src/bots    (pure bots)  │     in both places
-                    │                              └──────────────────────────┘
- src/engine, src/bots also run in the browser for single player
+ browser (React)                                   Node server (for online rooms)
+ ───────────────                                   ────────────────────────────
+ App ─► LandingPage ─► OnlineApp                   app.ts  HTTP routes + long poll
+                           │                        rooms.ts RoomManager (all the logic)
+                           ├─ useRoom                   │  uses ▼
+                           ├─ presenter             ┌──────────────────────────┐
+                           └─ net/client ─────────► │ src/engine  (pure rules) │
+                                fetch / long poll   │ src/bots    (pure bots)  │
+                                                    └──────────────────────────┘
+ LocalGame (retained in source, not exposed by App) ─► GameScreen
 ```
 
-- **One engine, two homes.** `src/engine` and `src/bots` are plain TypeScript with no DOM and no Node APIs. Single player runs them in the browser. Online rooms run the very same code on the server, which acts as the referee.
-- **One screen, two sources.** `GameScreen` only knows how to draw a `PlayerView` for "my seat" and report a `Move`. `LocalGame` feeds it from a local reducer; `OnlineApp` feeds it from the network.
+- **One engine, two homes.** `src/engine` and `src/bots` are plain TypeScript with no DOM and no Node APIs. The retained local-game module runs them in the browser; online rooms run the same code on the server, which acts as the referee. The public app currently exposes multiplayer only.
+- **One screen, two sources.** `GameScreen` only knows how to draw a `PlayerView` for "my seat" and report a `Move`. `OnlineApp` feeds it from the network; the unmounted `LocalGame` module feeds it from a local reducer.
 - **Nothing is stored server-side.** Rooms live in memory and disappear when everyone leaves (or the server restarts). The browser stores a name, a colour, settings and seat tokens in `localStorage`.
 
 ## 2. The engine (`src/engine`)
@@ -57,18 +57,19 @@ App ─┬─ LandingPage
 ```
 
 - **`GameScreen`** owns the local interaction only: selected cards, hint, status line, and "click anywhere else clears the selection". It receives `view`, `turnShown`, callbacks and a `gameOverActions` node, so the two modes differ only in what they pass.
-- **Presentation.** `dealPresentation.ts` reveals one card at a time around the viewer's seat (30 ms per card), then shows a 650 ms opening message; controls and local bots wait until it finishes. A normal winning play remains visible for 750 ms before the end screen. Reduced motion skips the animated deal and winning-play delay, but retains the opening message. `dealNumber` in the local session distinguishes new deals even when replaying the same code.
-- **Record and history.** The header shows the local session win record. Online, `online/RoomStats.tsx` opens a room-lifetime participant leaderboard from the record; offline has no popup. `Board.tsx` renders up to five recent moves; `game-presentation.css` reveals extra rows only when the table has room.
+- **Presentation.** `dealPresentation.ts` reveals one card at a time around the viewer's seat (30 ms per card), then shows a 650 ms opening message. A normal winning play remains visible for 750 ms before the end screen. Reduced motion skips the animated deal and winning-play delay, but retains the opening message.
+- **Record and history.** Online, `online/RoomStats.tsx` opens a room-lifetime participant leaderboard from the header record. The retained local-game module tracks a local session record. `Board.tsx` renders up to five recent moves; `game-presentation.css` reveals extra rows only when the table has room.
 - **Identity UI.** `profile.ts` gives a first-time visitor a random funny name (`FUNNY_NAMES`) and colour, saved in `vc13.profile`, so creating or joining a room never asks for anything. `ProfileEditor` (in the online menu tab) saves a colour the moment it is picked and a name with its Save button. The room code shows in the middle of the header (`GameScreen`'s `headerCenter`) and at the top of the online menu tab.
-- **Copying codes.** Every shown deal code or room code is a `CopyCode` (`CopyCode.tsx`): tap or click to copy it, with a short "copied" message from the single `ToastHost` mounted in `App`. There are no separate copy buttons and no invite link (`?room=CODE` links still open a room).
+- **Copying codes.** Every shown deal code or room code is a `CopyCode` (`CopyCode.tsx`): tap or click to copy it, with a short "copied" message from the single `ToastHost` mounted in `App`. Room links using `?room=CODE` are supported, but the UI copies the room code rather than generating an invite link.
 - **Rules.** The `?` button in the header opens `RulesDialog` (`Rules.tsx`) over the online game; tapping outside it, Escape or × closes it. The rules are not a menu tab.
-- **End screen.** `GameOver` (`Board.tsx`) lists every player in seat order with the same look: the winner's row shows their last play (`winningPlay` in `engine/game.ts`, or the dealt hand after an instant win) with a muted "(winning hand)" note, and the others show what they still held. Online, the host's only action is *Start next game*: no deal-code field and no replay.
+- **End screen.** `GameOver` (`Board.tsx`) lists every player in seat order with the same look: the winner's row shows their last play (`winningPlay` in `engine/game.ts`, or the dealt hand after an instant win) with a muted "(winning hand)" note, and the others show what they still held. Online, the deal code is informational only; the host can start the next game, but deals cannot be replayed.
 - **`PlayersContext`** (`players.tsx`) says who is at each seat. `relSeat`/`seatAt` rotate the table so *you* are always at the bottom (left, top and right follow clockwise). Single player uses `LOCAL_PLAYERS`; online builds it from the room with `playersFromRoom`.
 - **`turnShown`** exists so a bot's seat lights up *before* its card lands. `LocalGame` does this with a two-step timer. Online, the presenter drives it (section 6).
-- **Landing page.** `LandingPage.tsx` offers multiplayer quickplay, room creation and joining by code. Local single-player code remains in `LocalGame.tsx` but is not linked from the public app flow. The landing page includes readable rules and game description; `index.html` also has crawlable fallback text and search/social metadata.
-- **`Menu.tsx`** is a generic tabbed dialog plus reusable rows (`BombRow`, `BotLevelRow`, `PersonalRows`). `LocalGame` and `OnlineApp` each assemble their own tabs.
+- **Landing page.** `LandingPage.tsx` offers multiplayer Quick Play, room creation and joining by code. Quick Play joins a random room with a present human and bot seat, or creates and starts a room if none qualifies. The page includes readable game/rules text; `index.html` provides crawlable fallback text, title/description, social metadata and JSON-LD, while `public/robots.txt` and `public/sitemap.xml` serve crawlers.
+- **`Menu.tsx`** is a generic tabbed dialog plus reusable rows (`BombRow`, `BotLevelRow`, `PersonalRows`). In online play, only the host can change room rules or bot level; personal settings remain available to each player. `LocalGame` and `OnlineApp` assemble their own tabs, but only `OnlineApp` is reachable from `App`.
 - **Settings and storage** (`settings.ts`, `profile.ts`, `online/seats.ts`) are small wrappers around `localStorage`, each tolerant of storage being blocked or corrupt. Keys: `vc13.settings`, `vc13.profile`, `vc13.rooms`.
-- **URLs** (`url.ts`): the public app reads `?room=ABC234` to open an online room. The existing deal-code parser is used by the local-game module, which is not linked from the public app flow.
+- **URLs** (`url.ts`): the public app reads `?room=ABC234` to open an online room. Deal-code parsing remains for the local-game module, which is not linked from the public app flow.
+- **Theme easter egg.** The logo smile appears after three seconds of hover/focus. Five quick taps on the logo toggle the app's dark theme.
 - **Responsive layout:** `styles.css` and `game-presentation.css`, with a phone layout under 700 px (a square table with the top opponent just above it).
 
 ## 5. Online play: the model
@@ -82,7 +83,7 @@ The server is a **relay and referee**, not a push service. The idea that makes i
 
 ### Identity
 
-There are no accounts. Joining returns a random 128-bit **seat token**; the client keeps it in `localStorage` (`vc13.rooms`, six newest rooms) and sends it as `Authorization: Bearer <token>`. The server looks the seat up by token (constant-time compare), so no seat number is ever sent. Present the saved token when joining again (after a reload, a locked phone, or a crash) and you get your seat back. Leaving gives up the seat but keeps the token locally: returning to the same room on that device joins an available seat with the same participant stats. Once left, the token cannot act until it joins again. Tokens are never included in room info or stats. A name and a colour are just display settings. Names are unique among current seats (a clash becomes "Sam 2"), and bot names are always reserved.
+There are no accounts. Joining returns a random 128-bit **seat token**; the client keeps it in `localStorage` (`vc13.rooms`, six newest rooms) and sends it as `Authorization: Bearer <token>`. The server looks the seat up by token (constant-time compare), so no seat number is ever sent. Present the saved token when joining again (after a reload, a locked phone, or a crash) and you get your seat back. Leaving gives up the seat but keeps the token locally: returning to the same room on that device joins an available seat with the same participant stats, provided the room still exists. Once left, the token cannot act until it joins again. Tokens are never included in room info or stats. A name and a colour are just display settings. Names are unique among current seats (a clash becomes "Sam 2"), and bot names are always reserved.
 
 ### Endpoints
 
@@ -183,11 +184,18 @@ Things to remember when hosting:
 | `dealCode.test.ts` | Round trips, typo rejection, forgiving input. |
 | `session.test.ts` | The single-player reducer. |
 | `protocol.test.ts` | Names, colours, room codes, validators. |
-| `rooms.test.ts` | The whole room model with a fake clock: join, leave, host handover, away takeover, settings, start, expiry, hidden hands per seat, long-poll subscriptions. |
-| `http.test.ts` | Real HTTP against an ephemeral server: routing, version check, limits, long-poll wake-up, static serving. |
+| `rooms.test.ts` | The whole room model with a fake clock: join, leave, Quick Play matching, host kick, host handover, away takeover, settings, start, expiry, hidden hands per seat, long-poll subscriptions. |
+| `http.test.ts` | Real HTTP against an ephemeral server: routing, Quick Play and kick endpoints, version check, limits, long-poll wake-up, static serving, `robots.txt` and `sitemap.xml`. |
 | `presenter.test.ts` | Frame playback order and timing as pure data. |
 
 There is no component-test harness. UI behaviour was checked in a real browser: two players (one desktop-sized, one phone-sized) creating, joining, playing whole games, rejoining after a reload, changing name/colour, losing and regaining the network, and leaving; plus the production bundle.
+
+Not covered by automated tests (checked by hand, or not at all):
+
+- **Five-tap dark mode and the three-second logo smile** (`Logo.tsx`, `.theme-dark` in `styles.css`). The toggle and the smile delay were checked in a browser on the landing page; the dark theme was not reviewed on every screen (end-of-game dialog, menu, room stats).
+- **Host-only room settings.** Guests see the bomb and bot-level controls disabled (`SettingsTab` in `OnlineApp.tsx`). The server enforces this with `403` (tested in `rooms.test.ts`), but the disabled UI is only checked by reading the code.
+- **Landing page, Quick Play button flow and the kicked-player message.** The server side is tested; the client behaviour (`LandingPage.tsx`, `useRoom.ts`) is not.
+- **Search metadata.** Tests check that `robots.txt` and `sitemap.xml` are served, not that `index.html` metadata or the crawlable text stays in step with the landing page.
 
 ## 10. Decisions and trade-offs
 
@@ -204,3 +212,6 @@ There is no component-test harness. UI behaviour was checked in a real browser: 
 - No scoring across games beyond a win count per seat, and no chop payments (Miền Bắc and other variants would go behind the `rules.ts` seam).
 - A trained bot (see `docs/AI_RL_Environment.md` for early notes) would plug in through the `Bot` interface and `BOT_BY_LEVEL`; it needs no server changes.
 - If the server ever needs to scale beyond one process, rooms would need sticky routing or a shared store.
+- A kick can't be made permanent: with no accounts, a kicked player can rejoin with a fresh identity.
+- Single-player mode is hidden, not removed (`LocalGame.tsx` and its tests remain). Bringing it back means linking it from `App.tsx` and `LandingPage.tsx`.
+- UI behaviour has no automated tests (see section 9). A component-test harness would be the first step if the UI grows further, starting with the logo tap logic and the host-only settings.

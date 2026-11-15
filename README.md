@@ -12,17 +12,17 @@ npm start          # serve the built app and the room API on http://localhost:30
 
 ## Playing
 
-The landing page offers **Quick Play**, **Create Room**, and **Join Room** by code. Quick Play joins a random room with a present player and an open bot seat; if none is available, it creates and starts a room. Create Room starts a new game and gives you a code to share. Bots fill open seats in multiplayer games.
+The landing page offers **Quick Play**, **Create Room**, and **Join Room** by code. Quick Play joins a random room with a present player and an open bot seat; if none is available, it creates and starts a room. Create Room starts a new game and gives you a code to share. Bots fill open seats. The public app currently offers multiplayer only.
 
-Tap **?** for the rules (tap outside the box to close it), and **i** for the menu: new or restarted deal, the deal code, and settings (bombs beat 2s only or anything, bot level and speed, hint button, move log; saved in `localStorage`).
+In a game, tap **?** for the rules and **i** for the menu. The **Online** tab shows the room code and players and lets you update your name and colour; the host can kick another player. In **Settings**, only the host can change the room rules or bot level (rules are locked during a game). Each player can change their own bot-animation speed, hints, and move log; those preferences are saved on that device.
 
-Cards are dealt around the table before a short opening message. The move log shows up to five recent moves when there is room.
+The room code is shown in the header and **Online** tab; tap it to copy. Friends can enter it on the landing page or open a `?room=ABC234` link to join. A joiner takes the next bot seat, even mid-game. If the host kicks someone, that seat becomes a bot and the kicked player's saved token is rejected; without accounts, they can still return as a new participant. Everyone gets a random funny name and colour. A player who drops out is covered by a bot until they return. The host starts each game, and the previous winner leads the next one.
 
-**Deal codes.** Every deal has a short code like `0000-0727`, shown when the game ends. Tap it to copy it. Save it, or paste it into the menu's deal code box, to replay the same cards and the same starting player. The code is also a link: `?code=0000-0727`. A mistyped code is rejected rather than loading a different deal. House rules and bot settings are not part of a code. The long form `?seed=123&leader=0..3` still works.
+Online deals are random. The deal code shown at the end is for reference; the public app does not load or replay deals. Deal-code parsing and local single-player components remain in the source but are not exposed in the current app flow.
 
-**Online.** The room code is shown at the top of the screen. Tap the room code (header or Online tab) to copy it, and friends can enter it on the landing page or open a `?room=ABC234` link to drop in. A joiner takes the next bot seat, even mid-game. The host can kick another human; that seat becomes a bot and the kicked player's saved seat token is rejected. Everyone gets a random funny name and colour (change yours any time in the **Online** tab: colour saves as you pick it, a name saves with its button). A player who drops out is covered by a bot until they come back. The host chooses the rules and starts each game, and the previous winner leads the next one. Online deals are always random: there is no replaying a deal or entering a deal code in a room. Your seat is remembered on your device, so reloading or locking your phone puts you back where you were.
+Tap the logo five times quickly to toggle dark mode. The smiley appears after the logo has been hovered or focused for three seconds.
 
-Tap or hover over your **Won** record online to see each participant's wins, games and win rate for that room. A completed game counts for everyone who occupied a seat during it; a win goes to whoever occupied the winning seat at the end, including a player covered by a bot while away. Stats survive leaving and returning on the same device while its room token is saved, but disappear when the room closes or the server restarts.
+Tap or hover over your **Won** record online to see each participant's wins, games and win rate for that room. A completed game counts for everyone who occupied a seat during it; a win goes to whoever occupied the winning seat at the end, including a player covered by a bot while away. Stats survive leaving and returning on the same device while its room token is saved, as long as another human keeps the room alive; they disappear when the room closes or the server restarts.
 
 ## Hosting it
 
@@ -35,7 +35,7 @@ For the intended `vc13.gg` deployment:
 3. Check that the shared Docker network and Traefik entrypoint in `docker-compose.yml` match your server. Do not publish the app's port directly.
 4. Start the container, then check `/api/health` on both hostnames and create and join a room from another device.
 
-The public landing page describes the game for search engines and AI crawlers. `robots.txt` and `sitemap.xml` are served from the site root.
+The public landing page contains crawlable game and rules text, while the page title, description, social metadata, and structured data describe Tiến Lên Miền Nam and its common English/Vietnamese names. `robots.txt` and `sitemap.xml` are served from the site root.
 
 The two hostnames have separate browser storage, so settings and saved room seats are not shared between them.
 
@@ -52,6 +52,6 @@ npm run build && PORT=3000 npm start
 - [AGENTS.md](AGENTS.md): start here if you are going to change the code (commands, layout, rules of the road, gotchas).
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how it all fits together, the online protocol, deployment, decisions.
 - [docs/VC_Game_Rules.md](docs/VC_Game_Rules.md): the card rules.
-- [docs/plan.md](docs/plan.md): scope, decisions and status.
+- [docs/plan.md](docs/plan.md): original scope and implementation history.
 
 The engine (`src/engine`) is pure TypeScript with no UI imports, and it runs both in the browser and on the server. Bots (`src/bots`) get only their own `PlayerView` and the legal moves.

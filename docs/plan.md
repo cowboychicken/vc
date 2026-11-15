@@ -1,6 +1,8 @@
 # VC_13 (Tiến Lên): Plan
 
-**Goal:** a light browser game for quick play, alone against three bots or online with friends. Anyone can start immediately. There are no accounts. Identity is a name and colour kept on the device. How it is built is in [ARCHITECTURE.md](./ARCHITECTURE.md); the rest of `/docs` marked exploratory or superseded is background only.
+> Historical planning document: the status below records the original implementation. The current public app is multiplayer-only; see [README.md](../README.md) and [ARCHITECTURE.md](./ARCHITECTURE.md) for current behavior.
+
+**Original goal:** a light browser game for quick play, alone against three bots or online with friends. Anyone can start immediately. There are no accounts. Identity is a name and colour kept on the device. How it is built is in [ARCHITECTURE.md](./ARCHITECTURE.md); the rest of `/docs` marked exploratory or superseded is background only.
 
 ## 1. Scope
 
@@ -34,7 +36,7 @@ tests/             # Vitest: engine, game, bots, deal codes, session, protocol, 
 Dockerfile, docker-compose.yml
 ```
 
-## 4. Steps and status
+## 4. Original implementation status
 
 1. **Release scope.** Done (section 1).
 2. **Rules variant.** Done: Miền Nam, written up in [VC_Game_Rules.md](./VC_Game_Rules.md).

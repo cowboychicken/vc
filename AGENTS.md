@@ -9,7 +9,7 @@ Read this first. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the detail beh
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Vite dev server (default port 5173). Also serves the room API in-process, so online play works with no second server. |
-| `npm test` | Vitest, all of `tests/` (about 170 tests, a few seconds). |
+| `npm test` | Vitest, all of `tests/` (about 190 tests, a few seconds). |
 | `npm run typecheck` | `tsc --noEmit` over `src`, `server`, `tests` and the Vite configs. |
 | `npm run build` | Typecheck, then the web app into `dist/`, then the server into `dist-server/index.js`. |
 | `npm start` | Runs the production server (`dist-server/index.js`), which serves `dist/` and the API. Env: `PORT` (3000), `HOST` (0.0.0.0), `STATIC_DIR` (dist), `TRUST_PROXY` (false). |
@@ -25,11 +25,14 @@ src/bots/     Bots. They see only a PlayerView and the legal moves.
 src/net/      Code shared by browser and server: protocol.ts (wire types, validators, names, colours,
               room codes), presenter.ts (frame playback, pure), client.ts (fetch wrapper, browser only).
 server/       Node: rooms.ts (all room logic), app.ts (HTTP routes + long poll), static.ts, limits.ts, index.ts.
-src/ui/       React. LandingPage, GameScreen (one seat-agnostic screen), LocalGame (single player),
-              online/ (OnlineApp, useRoom hook), Menu, Board, settings/profile/url helpers.
+src/ui/       React. LandingPage, GameScreen (one seat-agnostic screen), LocalGame (retained but
+              not exposed in the public app), online/ (OnlineApp, useRoom hook), Menu, Board,
+              settings/profile/url helpers.
 tests/        Vitest. Mirrors the layers: engine, game, bots, dealCode, session, protocol, rooms, http, presenter.
 docs/         Rules, architecture, plan. Older exploratory docs are marked as such.
 ```
+
+`index.html` contains the crawlable landing text and search/social metadata; `public/robots.txt` and `public/sitemap.xml` are the crawler files.
 
 ## Rules of the road (invariants)
 
@@ -46,6 +49,7 @@ docs/         Rules, architecture, plan. Older exploratory docs are marked as su
 - UI defaults in `src/ui/settings.ts`: bot speed `normal` (gap 300 ms / think 480 ms), and the house rule **bombs beat anything** on. The engine's own `DEFAULT_RULES` stays `bombsBeatAnything: false`.
 - Look and feel: flat black and white, monospace, square corners, mobile first (phone layout under 700 px). No green felt.
 - Header logo is `VC13.gg` (set in VT323); the tab title includes Tiến Lên Miền Nam for search. The repo and docs still say `VC_13`. Bots are `Bot One`, `Bot Two`, `Bot Three`.
+- The logo's smile appears after three seconds of hover/focus; five quick taps toggle dark mode. Keep the hidden tap sequence intact unless asked to change it.
 - Seeds and deal codes are not secret, and cheating prevention is not a goal. Online identity is only a local name and colour plus a per-room seat token. No logins.
 - Deployment target is `vc13.gg` on a home server behind a Cloudflare Tunnel and Traefik (see `docker-compose.yml`).
 
