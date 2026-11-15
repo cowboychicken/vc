@@ -14,7 +14,9 @@ export function Entry({ entry }: { entry: HistoryEntry }) {
   );
 }
 
-export function Opponent({ seat, view, turnShown }: { seat: number; view: PlayerView; turnShown: boolean }) {
+export function Opponent({
+  seat, view, turnShown, dealing = false,
+}: { seat: number; view: PlayerView; turnShown: boolean; dealing?: boolean }) {
   const players = usePlayers();
   const count = view.handSizes[seat]!;
   const active = turnShown && view.turn === seat && view.winner === null;
@@ -23,7 +25,9 @@ export function Opponent({ seat, view, turnShown }: { seat: number; view: Player
   const position = POSITIONS[relSeat(players, seat)];
   const cls = ["opp", `opp-${position}`, active ? "active" : "", passed ? "passed" : ""].join(" ");
   const status =
-    view.winner === seat
+    dealing
+      ? ""
+      : view.winner === seat
       ? "Winner!"
       : view.winner !== null
         ? ""
@@ -53,7 +57,7 @@ export function Opponent({ seat, view, turnShown }: { seat: number; view: Player
 
 export function Felt({ view, showLog }: { view: PlayerView; showLog: boolean }) {
   const { table, history } = view;
-  const recent = history.slice(-3).reverse();
+  const recent = history.slice(-5).reverse();
   return (
     <div className="felt" data-testid="table">
       {table ? (
@@ -73,7 +77,7 @@ export function Felt({ view, showLog }: { view: PlayerView; showLog: boolean }) 
       {showLog && (
         <ul className="ticker" aria-label="Recent moves">
           {recent.map((e, i) => (
-            <li key={history.length - i} style={{ opacity: 1 - i * 0.3 }}>
+            <li key={history.length - i} style={{ opacity: 1 - i * 0.12 }}>
               <Entry entry={e} />
             </li>
           ))}

@@ -10,6 +10,7 @@ import { RulesDialog } from "../Rules";
 import { BOT_TIMING, type Settings, rulesFromSettings } from "../settings";
 import type { OnlineIntent } from "./intent";
 import { SeatList } from "./parts";
+import { RoomStats } from "./RoomStats";
 import { type RoomHandle, useRoom } from "./useRoom";
 
 interface Props {
@@ -103,6 +104,12 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
   const shown = presenter.shown;
   const isHost = room.host === seat;
   const hostName = room.seats[room.host]?.name ?? "the host";
+  const myId = room.seats[seat]!.playerId;
+  const myStats = room.playerStats.find((player) => player.id === myId);
+  if (!myStats) {
+    return <Message title="Couldn't load player stats"><p>Reload the page to try again.</p></Message>;
+  }
+  const record = `Won ${myStats.wins} of ${myStats.games}`;
 
   return (
     <PlayersContext.Provider value={players}>
@@ -120,7 +127,11 @@ export function OnlineApp({ intent, settings, onSettings, profile, onProfile, on
         view={shown.view}
         turnShown={presenter.lit}
         settings={settings}
-        record={`Won ${room.wins[seat] ?? 0} of ${room.games}`}
+        record={record}
+        recordContent={<RoomStats record={record} players={room.playerStats} me={myId} />}
+        opening={handle.opening}
+        reducedMotion={handle.reducedMotion}
+        playbackPending={presenter.pending.length > 0}
         dealCode={room.dealCode}
         onMove={handle.move}
         onOpenMenu={() => setMenuOpen(true)}

@@ -27,7 +27,7 @@ function write(all: Record<string, Stored>): void {
   }
 }
 
-/** The seat token for a room this device was in, so a reload or a locked phone returns to the same seat. */
+/** The room token also identifies a returning player after they have left their seat. */
 export function loadSeatToken(code: string): string | undefined {
   const stored = read()[code];
   return typeof stored?.token === "string" ? stored.token : undefined;

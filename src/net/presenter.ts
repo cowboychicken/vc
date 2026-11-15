@@ -12,12 +12,14 @@ export interface PresenterState {
   pending: Frame[];
   /** Whether the seat to move in `shown` is highlighted. */
   lit: boolean;
+  /** Animate newly received deals, but not a snapshot seen when joining an existing room. */
+  animateDeal: boolean;
   /** Highest frame number received, to ask the server for what comes after. */
   lastN: number;
 }
 
 export type PresenterAction =
-  | { type: "frames"; frames: readonly Frame[] }
+  | { type: "frames"; frames: readonly Frame[]; animateInitialDeal?: boolean }
   | { type: "light" }
   | { type: "show" }
   | { type: "reset" };
@@ -31,8 +33,9 @@ export interface Timing {
 
 /** More than this waiting (someone came back after a while) and we skip straight to the latest. */
 export const MAX_ANIMATED = 6;
+export const FINAL_PLAY_MS = 750;
 
-export const initialPresenter = (): PresenterState => ({ shown: null, pending: [], lit: true, lastN: -1 });
+export const initialPresenter = (): PresenterState => ({ shown: null, pending: [], lit: true, animateDeal: false, lastN: -1 });
 
 export function presenterReducer(state: PresenterState, action: PresenterAction): PresenterState {
   switch (action.type) {
@@ -44,9 +47,14 @@ export function presenterReducer(state: PresenterState, action: PresenterAction)
       if (fresh.length === 0) return state;
       const lastN = fresh[fresh.length - 1]!.n;
       // First sight of the game: show where it stands, without replaying how it got there.
-      if (state.shown === null) return { shown: fresh[fresh.length - 1]!, pending: [], lit: true, lastN };
+      if (state.shown === null) {
+        if (action.animateInitialDeal && fresh[0]!.kind === "deal" && fresh.length <= MAX_ANIMATED + 1) {
+          return { shown: fresh[0]!, pending: fresh.slice(1), lit: true, animateDeal: true, lastN };
+        }
+        return { shown: fresh[fresh.length - 1]!, pending: [], lit: true, animateDeal: false, lastN };
+      }
       const pending = [...state.pending, ...fresh];
-      if (pending.length > MAX_ANIMATED) return { shown: pending[pending.length - 1]!, pending: [], lit: true, lastN };
+      if (pending.length > MAX_ANIMATED) return { shown: pending[pending.length - 1]!, pending: [], lit: true, animateDeal: false, lastN };
       return { ...state, pending, lastN };
     }
 
@@ -57,7 +65,7 @@ export function presenterReducer(state: PresenterState, action: PresenterAction)
       const [next, ...rest] = state.pending;
       if (!next) return state;
       // With more to come, nobody is lit until their beat; otherwise it is simply the next player's turn.
-      return { ...state, shown: next, pending: rest, lit: rest.length === 0 };
+      return { ...state, shown: next, pending: rest, lit: rest.length === 0, animateDeal: next.kind === "deal" };
     }
   }
 }
@@ -72,6 +80,9 @@ export function nextStep(state: PresenterState, timing: Timing): Step | null {
   const { shown, pending, lit } = state;
   const next = pending[0];
   if (!shown || !next) return null;
+  if (shown.kind === "move" && shown.view.winner !== null && next.kind === "deal") {
+    return { delay: FINAL_PLAY_MS, action: { type: "show" } };
+  }
   // A deal, or a move by a person, shows the moment it arrives.
   if (next.kind === "deal" || !next.bot) return { delay: 0, action: { type: "show" } };
   if (!lit) {

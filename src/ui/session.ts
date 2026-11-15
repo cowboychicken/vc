@@ -18,6 +18,7 @@ export interface Session {
   start: NewGameOptions;
   played: number;
   won: number;
+  dealNumber: number;
 }
 
 export type SessionAction =
@@ -29,9 +30,9 @@ export type SessionAction =
   | { type: "load"; deal: Deal }
   | { type: "rules"; rules: RuleOptions };
 
-function begin(prev: Pick<Session, "played" | "won">, start: NewGameOptions): Session {
+function begin(prev: Pick<Session, "played" | "won" | "dealNumber">, start: NewGameOptions): Session {
   const game = newGame(start);
-  return { game, start, ...tally(prev, game) };
+  return { game, start, dealNumber: prev.dealNumber + 1, ...tally(prev, game) };
 }
 
 function tally({ played, won }: Pick<Session, "played" | "won">, game: GameState) {
@@ -48,7 +49,7 @@ export function isTurnShown(game: GameState, revealed: GameState | null): boolea
   return game.winner !== null || game.turn === HUMAN || game.history.length === 0 || revealed === game;
 }
 
-export const initSession = (start: NewGameOptions): Session => begin({ played: 0, won: 0 }, start);
+export const initSession = (start: NewGameOptions): Session => begin({ played: 0, won: 0, dealNumber: -1 }, start);
 
 function advance(session: Session, move: Move): Session {
   const game = applyMove(session.game, move);

@@ -70,6 +70,7 @@ describe("session reducer", () => {
     expect(again.game.hands).toEqual(first.game.hands);
     expect(again.game.turn).toBe(first.game.turn);
     expect(again.game.openingRequired).toBe(first.game.openingRequired);
+    expect(again.dealNumber).toBe(first.dealNumber + 1);
   });
 
   it("restarting mid-game abandons it without counting a result", () => {

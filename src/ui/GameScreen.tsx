@@ -17,8 +17,10 @@ import {
 import { CardFace } from "./CardFace";
 import { Felt, GameOver, Opponent } from "./Board";
 import { Logo } from "./Logo";
+import { dealtCounts, FINISH_MS, openingMessage, type DealPresentation } from "./dealPresentation";
 import { nameOf, possessiveOf, seatAt, usePlayers } from "./players";
 import type { Settings } from "./settings";
+import "./game-presentation.css";
 
 /** Clicking anything else, like the table or empty space, drops the current selection. */
 const KEEPS_SELECTION = "button, a, input, .overlay";
@@ -31,6 +33,10 @@ interface Props {
   settings: Settings;
   /** Shown in the header, like "Won 1 of 3". */
   record: string;
+  recordContent?: ReactNode;
+  opening: DealPresentation;
+  reducedMotion: boolean;
+  playbackPending?: boolean;
   dealCode: string | null;
   onMove: (move: Move) => void;
   onOpenMenu: () => void;
@@ -48,6 +54,10 @@ export function GameScreen({
   turnShown,
   settings,
   record,
+  recordContent,
+  opening,
+  reducedMotion,
+  playbackPending = false,
   dealCode,
   onMove,
   onOpenMenu,
@@ -59,8 +69,25 @@ export function GameScreen({
   const players = usePlayers();
   const [selected, setSelected] = useState<Card[]>([]);
   const [hint, setHint] = useState<string | null>(null);
-  const myTurn = view.turn === view.seat && view.winner === null;
+  const openingActive = opening.phase !== "ready";
+  const myTurn = view.turn === view.seat && view.winner === null && !openingActive && !playbackPending;
   const hasSelection = selected.length > 0;
+  const [showGameOver, setShowGameOver] = useState(
+    () => view.winner !== null && !openingActive,
+  );
+
+  useEffect(() => {
+    if (view.winner === null || openingActive) {
+      setShowGameOver(false);
+      return;
+    }
+    if (view.instantWin || reducedMotion) {
+      setShowGameOver(true);
+      return;
+    }
+    const id = window.setTimeout(() => setShowGameOver(true), FINISH_MS);
+    return () => window.clearTimeout(id);
+  }, [view.winner, view.instantWin, openingActive, reducedMotion]);
 
   const clearSelection = useCallback(() => {
     setSelected([]);
@@ -123,7 +150,10 @@ export function GameScreen({
 
   let status: string;
   let tone: "info" | "warn" | "ok" = "info";
-  if (view.winner !== null) status = "Game over.";
+  if (opening.phase === "dealing") status = "Dealing…";
+  else if (opening.phase === "intro") status = openingMessage(view, nameOf(players, view.turn));
+  else if (view.winner !== null) status = "Game over.";
+  else if (playbackPending && view.turn === view.seat) status = "Catching up…";
   else if (!myTurn) status = turnShown ? `${nameOf(players, view.turn)} is playing…` : "";
   else if (hasSelection && reason) {
     status = reason;
@@ -140,6 +170,11 @@ export function GameScreen({
   } else if (view.openingRequired) status = `You hold ${cardLabel(THREE_OF_SPADES)}. Lead with it.`;
   else status = "Your lead. Play any combination.";
 
+  const counts = dealtCounts(opening.dealt, view.seat);
+  const displayedView = openingActive
+    ? { ...view, hand: view.hand.slice(0, counts[view.seat]), handSizes: counts, winner: null }
+    : view;
+
   return (
     <div className="app">
       <header className="topbar">
@@ -150,7 +185,7 @@ export function GameScreen({
           </span>
         )}
         <div className="meta">
-          <span data-testid="record">{record}</span>
+          {recordContent ?? <span data-testid="record">{record}</span>}
           <button
             type="button"
             className="icon-btn"
@@ -174,10 +209,13 @@ export function GameScreen({
       </header>
 
       <main className="board">
-        <Opponent seat={seatAt(players, 2)} view={view} turnShown={turnShown} />
-        <Opponent seat={seatAt(players, 1)} view={view} turnShown={turnShown} />
-        <Felt view={view} showLog={settings.moveLog} />
-        <Opponent seat={seatAt(players, 3)} view={view} turnShown={turnShown} />
+        <Opponent seat={seatAt(players, 2)} view={displayedView} turnShown={turnShown && !openingActive} dealing={openingActive} />
+        <Opponent seat={seatAt(players, 1)} view={displayedView} turnShown={turnShown && !openingActive} dealing={openingActive} />
+        <Felt view={displayedView} showLog={settings.moveLog} />
+        <Opponent seat={seatAt(players, 3)} view={displayedView} turnShown={turnShown && !openingActive} dealing={openingActive} />
+        {opening.phase === "dealing" && opening.dealt > 0 && (
+          <span key={opening.dealt} className={`dealing-card deal-to-${(opening.dealt - 1) % 4}`} aria-hidden="true" />
+        )}
       </main>
 
       <section className={`player${myTurn ? " active" : ""}`} aria-label="Your hand">
@@ -185,12 +223,12 @@ export function GameScreen({
           {status}
         </p>
         <div className="hand" data-testid="hand">
-          {view.hand.map((c) => (
+          {displayedView.hand.map((c) => (
             <CardFace key={c} card={c} selected={selected.includes(c)} onToggle={toggle} />
           ))}
         </div>
         <div className="actions">
-          <button type="button" onClick={doPass} disabled={!canPass(view)}>
+          <button type="button" onClick={doPass} disabled={!myTurn || !canPass(view)}>
             Pass
           </button>
           {settings.hints && (
@@ -207,7 +245,9 @@ export function GameScreen({
         </div>
       </section>
 
-      {view.winner !== null && <GameOver view={view} dealCode={dealCode} actions={gameOverActions} />}
+      {view.winner !== null && !openingActive && showGameOver && (
+        <GameOver view={view} dealCode={dealCode} actions={gameOverActions} />
+      )}
       {children}
     </div>
   );

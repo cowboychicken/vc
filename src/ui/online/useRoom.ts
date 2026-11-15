@@ -15,6 +15,7 @@ import {
 import { type PresenterState, type Timing, initialPresenter, nextStep, presenterReducer } from "../../net/presenter";
 import type { JoinResponse, Profile, RoomInfo, UpdateResponse } from "../../net/protocol";
 import type { OnlineIntent } from "./intent";
+import { type DealPresentation, useDealPresentation, useReducedMotion } from "../dealPresentation";
 import { setAddress } from "../url";
 import { forgetSeatToken, loadSeatToken, saveSeatToken } from "./seats";
 
@@ -35,6 +36,8 @@ export interface RoomHandle {
   seat: number | null;
   room: RoomInfo | null;
   presenter: PresenterState;
+  opening: DealPresentation;
+  reducedMotion: boolean;
   move: (move: Move) => void;
   start: () => void;
   setSettings: (patch: { rules?: RuleOptions; botLevel?: BotLevel }) => void;
@@ -78,6 +81,8 @@ export function useRoom(intent: OnlineIntent, profile: Profile, prefs: Prefs, ti
   const [seat, setSeat] = useState<number | null>(null);
   const [code, setCode] = useState<string | null>(intent.type === "join" ? intent.code : null);
   const [presenter, dispatch] = useReducer(presenterReducer, undefined, initialPresenter);
+  const reducedMotion = useReducedMotion();
+  const opening = useDealPresentation(presenter.animateDeal ? presenter.shown?.n ?? null : null, reducedMotion);
 
   const token = useRef<string | null>(null);
   const joinedCode = useRef<string | null>(null);
@@ -88,7 +93,7 @@ export function useRoom(intent: OnlineIntent, profile: Profile, prefs: Prefs, ti
   const latest = useRef({ profile, prefs });
   latest.current = { profile, prefs };
 
-  const apply = useCallback((update: UpdateResponse) => {
+  const apply = useCallback((update: UpdateResponse, animateInitialDeal = false) => {
     if (update.room.rev >= rev.current) {
       rev.current = update.room.rev;
       setRoom(update.room);
@@ -96,17 +101,18 @@ export function useRoom(intent: OnlineIntent, profile: Profile, prefs: Prefs, ti
     }
     if (update.frames.length > 0) {
       since.current = Math.max(since.current, ...update.frames.map((f) => f.n));
-      dispatch({ type: "frames", frames: update.frames });
+      dispatch({ type: "frames", frames: update.frames, animateInitialDeal });
     }
   }, []);
 
   // Plays the server's frames back one beat at a time.
   useEffect(() => {
+    if (opening.phase !== "ready") return;
     const step = nextStep(presenter, timing);
     if (!step) return;
     const id = window.setTimeout(() => dispatch(step.action), step.delay);
     return () => window.clearTimeout(id);
-  }, [presenter, timing]);
+  }, [presenter, timing, opening.phase]);
 
   useEffect(() => {
     if (!notice) return;
@@ -152,7 +158,7 @@ export function useRoom(intent: OnlineIntent, profile: Profile, prefs: Prefs, ti
       setCode(roomCode);
       saveSeatToken(roomCode, joined.token);
       if (intent.type === "create") setAddress(`?room=${roomCode}`);
-      apply(joined);
+      apply(joined, intent.type === "create");
       setStatus("connected");
 
       let failures = 0;
@@ -184,7 +190,7 @@ export function useRoom(intent: OnlineIntent, profile: Profile, prefs: Prefs, ti
           if (e instanceof ApiError && e.status === 401) {
             // The server no longer knows this seat (it expired, or the server restarted). Ask for a fresh one.
             try {
-              const again = await joinRoom(roomCode, latest.current.profile);
+              const again = await joinRoom(roomCode, latest.current.profile, loadSeatToken(roomCode));
               token.current = again.token;
               saveSeatToken(roomCode, again.token);
               rev.current = -1;
@@ -192,9 +198,9 @@ export function useRoom(intent: OnlineIntent, profile: Profile, prefs: Prefs, ti
               dispatch({ type: "reset" });
               apply(again);
               continue;
-            } catch {
-              forgetSeatToken(roomCode);
-              return fail("You are no longer in this room.");
+            } catch (e) {
+              if (e instanceof ApiError && e.status === 404) forgetSeatToken(roomCode);
+              return fail(e instanceof ApiError ? e.message : "Couldn't rejoin the room. Check your connection and try again.");
             }
           }
           if (e instanceof ApiError && (e.status === 404 || e.code === "outdated")) {
@@ -238,6 +244,8 @@ export function useRoom(intent: OnlineIntent, profile: Profile, prefs: Prefs, ti
     seat,
     room,
     presenter,
+    opening,
+    reducedMotion,
     move: (move) => void act((c, t, s) => sendMove(c, t, move, s)),
     start: () => void act((c, t, s) => startGame(c, t, s)),
     setSettings: (patch) => void act((c, t, s) => sendSettings(c, t, s, patch)),
@@ -247,7 +255,6 @@ export function useRoom(intent: OnlineIntent, profile: Profile, prefs: Prefs, ti
       poll.current?.abort();
       const roomCode = joinedCode.current;
       const seatToken = token.current;
-      if (roomCode) forgetSeatToken(roomCode);
       if (roomCode && seatToken) {
         try {
           await leaveRoom(roomCode, seatToken);

@@ -92,7 +92,7 @@ describe("room API", () => {
   });
 
   it("refuses requests from an out-of-date page", async () => {
-    for (const version of [null, "0", "999"]) {
+    for (const version of [null, "0", String(PROTOCOL_VERSION - 1), "999"]) {
       const r = await call<{ error: string }>(h.base, "POST", "/api/rooms", { body: ann, version });
       expect(r.status).toBe(426);
       expect(r.body!.error).toBe("outdated");
@@ -114,6 +114,22 @@ describe("room API", () => {
     expect(joined.status).toBe(200);
     expect(joined.body!.seat).toBe(1);
     expect(joined.body!.room.seats[1]!.name).toBe("Bo");
+  });
+
+  it("keeps a returning player's room identity without exposing their token", async () => {
+    const { code, token } = await create();
+    const joined = (await call<JoinResponse>(h.base, "POST", `/api/rooms/${code}/join`, { body: bo })).body!;
+    const id = joined.room.seats[joined.seat]!.playerId;
+    expect((await call(h.base, "POST", `/api/rooms/${code}/leave`, { token: joined.token, body: {} })).status).toBe(200);
+    const peek = await call<UpdateResponse["room"]>(h.base, "GET", `/api/rooms/${code}`);
+    expect(peek.body!.playerStats.find((p) => p.id === id)).toMatchObject({ name: "Bo", present: false });
+    expect(peek.text).not.toContain(joined.token);
+    expect(peek.text).not.toContain(token);
+    const returned = await call<JoinResponse>(h.base, "POST", `/api/rooms/${code}/join`, {
+      body: { ...bo, token: joined.token },
+    });
+    expect(returned.body!.token).toBe(joined.token);
+    expect(returned.body!.room.seats[returned.body!.seat]!.playerId).toBe(id);
   });
 
   it("returns clear errors for bad input", async () => {

@@ -383,6 +383,70 @@ describe("leaving", () => {
   });
 });
 
+describe("room player stats", () => {
+  it("keeps wins with players rather than seats, including after leaving, returning and renaming", () => {
+    const { manager } = setup();
+    const { code, token } = manager.create(ann);
+    let seed = 0;
+    while (newGame({ seed }).winner !== 1) seed++;
+    const deal = encodeDeal({ seed });
+
+    manager.start(code, token, deal);
+    const boToken = manager.join(code, bo).token;
+    let room = manager.update(code, token, -1).room;
+    expect(room.playerStats.find((p) => p.name === "Bot One")).toMatchObject({ games: 1, wins: 1 });
+    expect(room.playerStats.find((p) => p.name === "Bo")).toMatchObject({ games: 0, wins: 0 });
+
+    manager.start(code, token, deal);
+    room = manager.update(code, token, -1).room;
+    const boId = room.seats[1]!.playerId;
+    expect(room.playerStats.find((p) => p.id === boId)).toMatchObject({ games: 1, wins: 1 });
+
+    manager.leave(code, boToken);
+    expectError(() => manager.update(code, boToken, -1), 401);
+    const cyToken = manager.join(code, { name: "Cy", color: "green" }).token;
+    room = manager.update(code, token, -1).room;
+    expect(room.playerStats.find((p) => p.id === boId)).toMatchObject({ games: 1, wins: 1, present: false });
+    expect(room.playerStats.find((p) => p.name === "Cy")).toMatchObject({ games: 0, wins: 0 });
+
+    expect(manager.join(code, { name: "Bobby", color: "blue" }, boToken).token).toBe(boToken);
+    room = manager.update(code, cyToken, -1).room;
+    expect(room.seats[2]!.playerId).toBe(boId);
+    expect(room.playerStats.find((p) => p.id === boId)).toMatchObject({ name: "Bobby", games: 1, wins: 1, present: true });
+    expect(JSON.stringify(room)).not.toContain(boToken);
+    expect(JSON.stringify(manager.peek(code))).not.toContain(cyToken);
+  });
+
+  it("counts a completed game once for everyone who occupied a seat during it", () => {
+    const { manager } = setup();
+    const { code, token } = manager.create(ann);
+    manager.start(code, token, encodeDeal({ seed: HOST_OPENS }));
+    const boToken = manager.join(code, bo).token;
+    manager.leave(code, boToken);
+    manager.join(code, bo, boToken);
+    manager.leave(code, boToken);
+    expect(manager.update(code, token, -1).room.playerStats.find((p) => p.name === "Bo")!.games).toBe(0);
+    playToEnd(manager, code, token);
+    const stats = manager.update(code, token, -1).room.playerStats;
+    expect(stats.find((p) => p.name === "Bo")).toMatchObject({ games: 1, wins: 0, present: false });
+    expect(stats.find((p) => p.name === "Bot One")).toMatchObject({ games: 1 });
+  });
+
+  it("bounds room player history without preventing a former player from returning", () => {
+    const { manager } = setup();
+    const { code, token } = manager.create(ann);
+    let first = "";
+    for (let i = 0; i < 99; i++) {
+      const guest = manager.join(code, bo);
+      if (i === 0) first = guest.token;
+      manager.leave(code, guest.token);
+    }
+    expectError(() => manager.join(code, bo), 429);
+    expect(manager.join(code, bo, first).token).toBe(first);
+    expect(manager.update(code, token, -1).room.playerStats.filter((p) => p.kind === "human")).toHaveLength(100);
+  });
+});
+
 describe("waking pollers", () => {
   it("notifies subscribers on change, and unsubscribing twice never drops another subscriber", () => {
     const { manager } = setup();

@@ -2,7 +2,7 @@ import type { BotLevel } from "../bots";
 import { DECK_SIZE, type Move, type PlayerView, type RuleOptions } from "../engine";
 
 /** Bump when the wire format or game rules change in a way an old page can't cope with. */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 export const VERSION_HEADER = "x-vc13-version";
 
 export const NUM_SEATS = 4;
@@ -81,11 +81,21 @@ export type Phase = "lobby" | "playing" | "over";
 
 export interface SeatInfo {
   kind: "human" | "bot";
+  playerId: number;
   name: string;
   color: ColorId | null;
   /** A human who has not been heard from recently; a bot plays for them until they are back. */
   away: boolean;
   host: boolean;
+}
+
+export interface RoomPlayerStats {
+  id: number;
+  name: string;
+  kind: "human" | "bot";
+  games: number;
+  wins: number;
+  present: boolean;
 }
 
 export interface RoomSettings {
@@ -104,6 +114,8 @@ export interface RoomInfo {
   /** Games finished in this room, and how many each seat has won. */
   games: number;
   wins: number[];
+  /** Room-lifetime totals by participant, including players who have left. */
+  playerStats: RoomPlayerStats[];
   /** Deal code of the current or last game. For reference only: online play never loads a deal from a code. */
   dealCode: string | null;
 }
@@ -141,7 +153,7 @@ export interface CreateRoomRequest extends Profile {
   botLevel?: BotLevel;
 }
 export interface JoinRoomRequest extends Profile {
-  /** Seat token from an earlier visit, to take the same seat back. */
+  /** Token from an earlier visit, to reclaim a seat or return with the same room stats. */
   token?: string;
 }
 export interface SinceRequest {

@@ -3,6 +3,7 @@ import { botMove, heuristicBot } from "../src/bots";
 import { applyMove, makeRng, newGame, viewFor, type GameState } from "../src/engine";
 import {
   MAX_ANIMATED,
+  FINAL_PLAY_MS,
   type PresenterAction,
   type PresenterState,
   type Timing,
@@ -52,6 +53,37 @@ describe("presenter", () => {
     expect(nextStep(state, timing)).toBeNull();
   });
 
+  it("shows a new room's deal first while retaining its queued bot moves", () => {
+    const frames = gameFrames();
+    const state = presenterReducer(initialPresenter(), {
+      type: "frames",
+      frames: frames.slice(0, 4),
+      animateInitialDeal: true,
+    });
+    expect(state.shown).toBe(frames[0]);
+    expect(state.pending).toEqual(frames.slice(1, 4));
+    expect(state.lastN).toBe(3);
+    expect(state.animateDeal).toBe(true);
+  });
+
+  it("does not replay a deal when joining an already advanced game", () => {
+    const frames = gameFrames();
+    const state = presenterReducer(initialPresenter(), {
+      type: "frames",
+      frames: frames.slice(1, 4),
+      animateInitialDeal: true,
+    });
+    expect(state.shown).toBe(frames[3]);
+    expect(state.pending).toEqual([]);
+    expect(state.animateDeal).toBe(false);
+  });
+
+  it("does not animate a deal snapshot when joining an existing room", () => {
+    const state = push(initialPresenter(), [gameFrames()[0]!]);
+    expect(state.shown?.kind).toBe("deal");
+    expect(state.animateDeal).toBe(false);
+  });
+
   it("ignores frames it has already seen, and sorts a batch that arrives out of order", () => {
     const frames = gameFrames();
     const first = push(initialPresenter(), frames.slice(0, 3));
@@ -91,7 +123,7 @@ describe("presenter", () => {
     const state = push(push(initialPresenter(), [over]), nextGame);
     const { steps } = drain(state);
     expect(steps.map((s) => [s.type, s.delay])).toEqual([
-      ["show", 0], // the deal, with nobody lit yet
+      ["show", FINAL_PLAY_MS], // leave the winning play visible before the next deal
       ["light", 0], // the opening bot, with no pause because nothing has been played
       ["show", timing.think],
       ["light", timing.gap],
@@ -124,12 +156,12 @@ describe("presenter", () => {
     expect(nextStep(afterHuman, timing)).toEqual({ delay: timing.gap, action: { type: "light" } });
   });
 
-  it("shows a new deal immediately, even straight after a finished game", () => {
+  it("holds the winning play before showing a new deal", () => {
     const frames = gameFrames();
     const over: Frame = { ...frames[2]!, n: 20, view: { ...frames[2]!.view, winner: 2 } };
     const deal: Frame = { ...frames[0]!, n: 21 };
     const state = push(push(initialPresenter(), [over]), [deal]);
-    expect(nextStep(state, timing)).toEqual({ delay: 0, action: { type: "show" } });
+    expect(nextStep(state, timing)).toEqual({ delay: FINAL_PLAY_MS, action: { type: "show" } });
     const { state: end } = drain(state);
     expect(end.shown!.kind).toBe("deal");
     expect(end.lit).toBe(true);

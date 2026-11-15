@@ -56,6 +56,8 @@ App ─┬─ LocalGame ───────────────┐
 ```
 
 - **`GameScreen`** owns the local interaction only: selected cards, hint, status line, and "click anywhere else clears the selection". It receives `view`, `turnShown`, callbacks and a `gameOverActions` node, so the two modes differ only in what they pass.
+- **Presentation.** `dealPresentation.ts` reveals one card at a time around the viewer's seat (30 ms per card), then shows a 650 ms opening message; controls and local bots wait until it finishes. A normal winning play remains visible for 750 ms before the end screen. Reduced motion skips the animated deal and winning-play delay, but retains the opening message. `dealNumber` in the local session distinguishes new deals even when replaying the same code.
+- **Record and history.** The header shows the local session win record. Online, `online/RoomStats.tsx` opens a room-lifetime participant leaderboard from the record; offline has no popup. `Board.tsx` renders up to five recent moves; `game-presentation.css` reveals extra rows only when the table has room.
 - **Identity UI.** `profile.ts` gives a first-time visitor a random funny name (`FUNNY_NAMES`) and colour, saved in `vc13.profile`, so creating or joining a room never asks for anything. `ProfileEditor` (in the online menu tab) saves a colour the moment it is picked and a name with its Save button. The room code shows in the middle of the header (`GameScreen`'s `headerCenter`) and at the top of the online menu tab.
 - **Copying codes.** Every shown deal code or room code is a `CopyCode` (`CopyCode.tsx`): tap or click to copy it, with a short "copied" message from the single `ToastHost` mounted in `App`. There are no separate copy buttons and no invite link (`?room=CODE` links still open a room).
 - **Rules.** The `?` button in the header opens `RulesDialog` (`Rules.tsx`) over the game, in single player and online alike; tapping outside it, Escape or × closes it. Single player pauses the bots while it is open. The rules are not a menu tab.
@@ -65,7 +67,7 @@ App ─┬─ LocalGame ───────────────┐
 - **`Menu.tsx`** is a generic tabbed dialog plus reusable rows (`BombRow`, `BotLevelRow`, `PersonalRows`). `LocalGame` and `OnlineApp` each assemble their own tabs.
 - **Settings and storage** (`settings.ts`, `profile.ts`, `online/seats.ts`) are small wrappers around `localStorage`, each tolerant of storage being blocked or corrupt. Keys: `vc13.settings`, `vc13.profile`, `vc13.rooms`.
 - **URLs** (`url.ts`): `?code=XXXX-XXXX` (or `?seed=N&leader=0..3`) opens a single-player deal; `?room=ABC234` opens an online room.
-- **Responsive layout:** a single CSS file, with a phone layout under 700 px (a square table with the top opponent just above it).
+- **Responsive layout:** `styles.css` and `game-presentation.css`, with a phone layout under 700 px (a square table with the top opponent just above it).
 
 ## 5. Online play: the model
 
@@ -78,7 +80,7 @@ The server is a **relay and referee**, not a push service. The idea that makes i
 
 ### Identity
 
-There are no accounts. Joining returns a random 128-bit **seat token**; the client keeps it in `localStorage` (`vc13.rooms`, six newest rooms) and sends it as `Authorization: Bearer <token>`. The server looks the seat up by token (constant-time compare), so no seat number is ever sent. Present the saved token when joining again (after a reload, a locked phone, or a crash) and you get your seat back. A name and a colour are just display settings. Names are unique per room (a clash becomes "Sam 2"), and bot names are always reserved.
+There are no accounts. Joining returns a random 128-bit **seat token**; the client keeps it in `localStorage` (`vc13.rooms`, six newest rooms) and sends it as `Authorization: Bearer <token>`. The server looks the seat up by token (constant-time compare), so no seat number is ever sent. Present the saved token when joining again (after a reload, a locked phone, or a crash) and you get your seat back. Leaving gives up the seat but keeps the token locally: returning to the same room on that device joins an available seat with the same participant stats. Once left, the token cannot act until it joins again. Tokens are never included in room info or stats. A name and a colour are just display settings. Names are unique among current seats (a clash becomes "Sam 2"), and bot names are always reserved.
 
 ### Endpoints
 
@@ -103,6 +105,7 @@ Types, validators, name/colour rules and room-code handling are all in `src/net/
 
 - **Phases:** `lobby` (only for an instant between creating a room and the client's first start) → `playing` → `over` → (host starts again) `playing` …
 - **Seats:** the host starts in seat 0. Empty seats are bots named by seat: Bot One, Bot Two and Bot Three for seats 1 to 3 (and Bot Four if seat 0 is ever vacated). A joiner takes the lowest bot seat.
+- **Player stats:** `RoomManager` tracks each human participant by room token and each bot by its fixed seat, independently of seat changes. A finished game counts once for everyone who occupied a seat during it, including mid-game arrivals and leavers; its win goes to the winning seat's occupant at the end. An away player's covering bot counts as that player, while a bot replacing a player who left counts separately. Renames update the participant's displayed name. Stats persist only in the room's memory and are lost with the room. To bound history, a room admits at most 100 distinct human participants over its lifetime; returning participants do not consume another slot.
 - **Who leads:** the first game opens with the 3♠ holder. Later games are led by the previous winner. The deal is always random: online play never loads a deal from a code (`RoomManager.start` takes an optional deal code only so tests can fix a deal; the HTTP layer never passes one).
 - **Bots run on the server.** After every human action the server plays all consecutive bot turns (`advanceBots`) and stops at a present human or the end of the game. The client is shown them as separate frames, flagged `bot: true`.
 - **Away takeover.** A human not heard from for 45 s is marked *away* and a bot plays their turns. They resume the moment they poll again.
@@ -113,8 +116,9 @@ Types, validators, name/colour rules and room-code handling are all in `src/net/
 
 The server answers instantly, so a human's move and the following bot moves arrive as one batch. `net/presenter.ts` is a small pure reducer + scheduler that replays a batch so it feels like single player: a bot's seat lights up, then its card lands, then a short gap. Timing is the *viewer's own* bot-speed setting (`BOT_TIMING`), so two players can watch at different speeds.
 
-- First sight of a game (joining or reloading) shows the latest frame immediately.
-- A deal, or a move by a person, shows at once.
+- First sight of an existing game (joining or reloading) shows the latest frame immediately. Creating a room instead plays its first deal before queued moves, unless the viewer has fallen too far behind.
+- A new deal is presented client-side before queued moves; a move by a person shows at once. The server never waits for the animation.
+- A winning move is held for 750 ms before a queued next deal, even if the host starts it immediately.
 - More than 6 frames waiting (you came back after a while) jumps to the latest.
 - Frames are de-duplicated by number, so overlapping responses never replay a move.
 
@@ -124,9 +128,9 @@ Resilience built into the loop:
 
 - Network errors back off 0.5 s → 8 s and show a "Reconnecting…" banner. After a failure the next request uses `wait=0`, so the banner clears as soon as the server answers.
 - The poll is cut short and restarted when the tab becomes visible or the browser goes back online.
-- `401` means the server forgot the seat: the client tries one fresh join. `404` means the room is gone; `426` means the page is out of date. Both show a clear message with *Try again* / *Play offline*.
+- `401` means the server forgot the seat: the client tries one join with the saved token to retain participant stats if possible. `404` means the room is gone; `426` means the page is out of date. Both show a clear message with *Try again* / *Play offline*.
 - A poll that returns at once with nothing new is slowed to one per second, so a bug can never turn into a tight request loop.
-- Leaving is explicit: it stops polling first, then tells the server, and forgets the stored token.
+- Leaving is explicit: it stops polling first, then tells the server. The stored token remains so a player who rejoins that room can recover their stats; it no longer authorizes actions until rejoining.
 
 ## 7. Server internals (`server/`)
 

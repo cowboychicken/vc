@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { type GameState, encodeDeal, viewFor } from "../engine";
 import { GameScreen } from "./GameScreen";
+import { useDealPresentation, useReducedMotion } from "./dealPresentation";
 import { LocalGameTab, MenuDialog, type MenuTab, BombRow, BotLevelRow, PersonalRows } from "./Menu";
 import type { OnlineIntent } from "./online/intent";
 import { LOCAL_PLAYERS, PlayersContext } from "./players";
@@ -27,6 +28,8 @@ export function LocalGame({ settings, onSettings, onOnline }: Props) {
   const view = useMemo(() => viewFor(game, HUMAN), [game]);
   const turnShown = isTurnShown(game, revealed);
   const dealCode = encodeDeal(session.start);
+  const reducedMotion = useReducedMotion();
+  const opening = useDealPresentation(session.dealNumber, reducedMotion);
 
   const updateSettings = (next: Settings) => {
     onSettings(next);
@@ -36,14 +39,14 @@ export function LocalGame({ settings, onSettings, onOnline }: Props) {
   // A bot's turn plays out in two beats: first it lights up, then its card lands.
   // Bots wait while the menu or the rules are open.
   useEffect(() => {
-    if (menuOpen || rulesOpen || game.winner !== null || game.turn === HUMAN) return;
+    if (menuOpen || rulesOpen || opening.phase !== "ready" || game.winner !== null || game.turn === HUMAN) return;
     const timing = BOT_TIMING[settings.botSpeed];
     const id = window.setTimeout(
       turnShown ? () => dispatch({ type: "bot", bot: BOT_BY_LEVEL[settings.botLevel] }) : () => setRevealed(game),
       turnShown ? timing.think : timing.gap,
     );
     return () => window.clearTimeout(id);
-  }, [game, turnShown, menuOpen, rulesOpen, settings.botLevel, settings.botSpeed]);
+  }, [game, turnShown, menuOpen, rulesOpen, opening.phase, settings.botLevel, settings.botSpeed]);
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -54,7 +57,6 @@ export function LocalGame({ settings, onSettings, onOnline }: Props) {
       content: (
         <LocalGameTab
           game={game}
-          dealCode={dealCode}
           onNewDeal={() => {
             dispatch(game.winner !== null ? { type: "rematch", seed: randomSeed() } : { type: "restart", seed: randomSeed() });
             closeMenu();
@@ -100,6 +102,8 @@ export function LocalGame({ settings, onSettings, onOnline }: Props) {
         turnShown={turnShown}
         settings={settings}
         record={`Won ${session.won} of ${session.played}`}
+        opening={opening}
+        reducedMotion={reducedMotion}
         dealCode={dealCode}
         onMove={(move) => dispatch({ type: "human", move })}
         onOpenMenu={() => setMenuOpen(true)}

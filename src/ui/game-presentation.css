@@ -1,0 +1,125 @@
+.board {
+  position: relative;
+}
+
+.dealing-card {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 22px;
+  border: 1px solid #000;
+  background: #fff;
+  pointer-events: none;
+  z-index: 2;
+  animation: fling-card 120ms ease-out both;
+}
+
+.deal-to-0 { --deal-x: 0px; --deal-y: 100px; }
+.deal-to-1 { --deal-x: -100px; --deal-y: 0px; }
+.deal-to-2 { --deal-x: 0px; --deal-y: -100px; }
+.deal-to-3 { --deal-x: 100px; --deal-y: 0px; }
+
+@keyframes fling-card {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(calc(-50% + var(--deal-x)), calc(-50% + var(--deal-y))) rotate(20deg); opacity: 0; }
+}
+
+.felt {
+  container-type: size;
+}
+
+.ticker {
+  min-height: 0;
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.ticker li {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ticker li:nth-child(n + 4) {
+  display: none;
+}
+
+@container (min-height: 140px) {
+  .ticker li:nth-child(4) { display: list-item; }
+}
+
+@container (min-height: 150px) {
+  .ticker li:nth-child(5) { display: list-item; }
+}
+
+.room-stats {
+  position: relative;
+}
+
+.room-stats-trigger {
+  border: 0;
+  padding: 2px 0;
+  background: none;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.room-stats-tail {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% - 5px);
+  right: 18px;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border-left: 1px solid #000;
+  border-top: 1px solid #000;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.room-stats-bubble {
+  position: absolute;
+  z-index: 9;
+  top: 100%;
+  right: -80px;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 24px));
+  max-height: min(320px, 50vh);
+  overflow: auto;
+  padding: 10px 12px;
+  border: 1px solid #000;
+  background: #fff;
+  color: #000;
+  line-height: 1.5;
+  box-shadow: 3px 3px 0 #000;
+}
+
+.room-stats-bubble table {
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.room-stats-bubble th,
+.room-stats-bubble td {
+  padding: 2px 8px 2px 0;
+}
+
+.room-stats-bubble th:last-child,
+.room-stats-bubble td:last-child {
+  padding-right: 0;
+}
+
+.room-stats-bubble td:first-child {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dealing-card { display: none; }
+}

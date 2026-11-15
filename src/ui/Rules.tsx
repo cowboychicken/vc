@@ -7,7 +7,7 @@ const RULES: { title: string; items: string[]; open?: boolean }[] = [
     open: true,
     items: [
       "Be first to play all 13 of your cards.",
-      "Take turns playing poker-style hands. Match what's on the table (same kind, but higher) until everyone passes, then you can start your own.",
+      "Take turns playing \"poker-style\" hands. Match what's on the table (same kind, but higher) until everyone passes, then you can start your own.",
       "Low to high: 3 4 5 6 7 8 9 10 J Q K A 2.",
       "Suits, low to high: ♠ ♣ ♦ ♥.",
     ],
@@ -56,7 +56,6 @@ export function RulesBody({ rules }: { rules: RuleOptions }) {
   );
   return (
     <div className="menu-body rules">
-      <p className="note tip">Tip: stuck? Tap Hint on your turn and it picks a play for you.</p>
       <div>
         {sections.map((section) => (
           <details key={section.title} open={section.open}>
@@ -69,6 +68,7 @@ export function RulesBody({ rules }: { rules: RuleOptions }) {
           </details>
         ))}
       </div>
+      <p className="note tip">Tip: stuck? Tap Hint on your turn and it picks a play for you.</p>
     </div>
   );
 }

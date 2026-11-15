@@ -1,7 +1,6 @@
-import { type ReactNode, useEffect, useId, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { type Deal, type GameState, decodeDeal } from "../engine";
 import { normalizeRoomCode } from "../net/protocol";
-import { CopyCode } from "./CopyCode";
 import type { OnlineIntent } from "./online/intent";
 import type { BotLevel, BotSpeed, Settings } from "./settings";
 
@@ -53,16 +52,65 @@ export function MenuDialog({ tabs, onClose }: { tabs: MenuTab[]; onClose: () => 
 
 type Confirm = "new" | "same" | "load" | "online";
 
+function InfoLabel({
+  label, children, labelId, muted = true,
+}: { label: string; children: ReactNode; labelId?: string; muted?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setOpen(false);
+      }
+    };
+    const onPointer = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("pointerdown", onPointer);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("pointerdown", onPointer);
+    };
+  }, [open]);
+
+  return (
+    <span
+      className="info-label"
+      ref={ref}
+      onPointerEnter={(e) => e.pointerType === "mouse" && setOpen(true)}
+      onPointerLeave={(e) => e.pointerType === "mouse" && !ref.current?.contains(document.activeElement) && setOpen(false)}
+    >
+      <button
+        type="button"
+        id={labelId}
+        className={`info-trigger${muted ? " code-label" : ""}`}
+        aria-describedby={open ? id : undefined}
+        aria-expanded={open}
+        onFocus={(e) => e.currentTarget.matches(":focus-visible") && setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {label}
+      </button>
+      {open && <span id={id} role="tooltip" className="info-tooltip">{children}</span>}
+    </span>
+  );
+}
+
 interface LocalGameTabProps {
   game: GameState;
-  dealCode: string;
   onNewDeal: () => void;
   onSameDeal: () => void;
   onLoadDeal: (deal: Deal) => void;
   onOnline: (intent: OnlineIntent) => void;
 }
 
-export function LocalGameTab({ game, dealCode, onNewDeal, onSameDeal, onLoadDeal, onOnline }: LocalGameTabProps) {
+export function LocalGameTab({ game, onNewDeal, onSameDeal, onLoadDeal, onOnline }: LocalGameTabProps) {
   const inProgress = game.winner === null && game.history.length > 0;
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [note, setNote] = useState("");
@@ -105,7 +153,7 @@ export function LocalGameTab({ game, dealCode, onNewDeal, onSameDeal, onLoadDeal
         </button>
       </div>
       <div className="menu-section">
-        <span className="code-label">Online, with friends</span>
+        <InfoLabel label="Online, with friends">Create a room or join one with a room code.</InfoLabel>
         <div className="menu-actions">
           <button type="button" onClick={() => act("online", () => onOnline({ type: "create" }))}>
             {confirm === "online" ? "Tap again" : "Play online"}
@@ -138,10 +186,7 @@ export function LocalGameTab({ game, dealCode, onNewDeal, onSameDeal, onLoadDeal
         </form>
       </div>
       <div className="menu-section">
-        <div className="code-row">
-          <span className="code-label">Deal code</span>
-          <CopyCode text={dealCode} label="Deal code" className="code" testId="deal-code" />
-        </div>
+        <InfoLabel label="Deal code">Enter a code to replay a deal. The code appears at the end of a game.</InfoLabel>
         <form
           className="code-form"
           onSubmit={(e) => {
@@ -180,12 +225,14 @@ export function LocalGameTab({ game, dealCode, onNewDeal, onSameDeal, onLoadDeal
 
 export function Segmented<T extends string>({
   label,
+  description,
   value,
   options,
   onChange,
   disabled = false,
 }: {
   label: string;
+  description?: ReactNode;
   value: T;
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
@@ -194,7 +241,11 @@ export function Segmented<T extends string>({
   const id = useId();
   return (
     <div className="setting">
-      <span id={id}>{label}</span>
+      {description ? (
+        <InfoLabel label={label} labelId={id} muted={false}>{description}</InfoLabel>
+      ) : (
+        <span id={id}>{label}</span>
+      )}
       <div className="seg" role="radiogroup" aria-labelledby={id}>
         {options.map((o) => (
           <button
@@ -231,6 +282,7 @@ export function BombRow({
   return (
     <Segmented
       label="Bombs beat"
+      description={<>A bomb is four of a kind (7-7-7-7) or at least three consecutive pairs (3-3, 4-4, 5-5). “2s only” limits chops to 2s and bombs; “Anything” allows other plays too. See Rules for details.</>}
       value={anything ? "anything" : "twos"}
       options={[
         { value: "twos", label: "2s only" },

@@ -54,12 +54,22 @@ export interface ManagerOptions {
 
 interface Seat {
   kind: "human" | "bot";
+  playerId: number;
   name: string;
   color: ColorId | null;
   token: string | null;
   lastSeen: number;
   /** The away flag clients were last told about. */
   shownAway: boolean;
+}
+
+interface Participant {
+  id: number;
+  kind: "human" | "bot";
+  name: string;
+  token: string | null;
+  games: number;
+  wins: number;
 }
 
 interface StoredFrame {
@@ -80,6 +90,8 @@ interface Room {
   botLevel: BotLevel;
   games: number;
   wins: number[];
+  participants: Participant[];
+  gameParticipants: Set<number>;
   lastWinner: number | null;
   game: GameState | null;
   dealCode: string | null;
@@ -89,6 +101,7 @@ interface Room {
 }
 
 const MAX_BOT_MOVES = 1000;
+const MAX_ROOM_HUMANS = 100;
 
 function safeEqual(a: string, b: string): boolean {
   const x = Buffer.from(a);
@@ -140,8 +153,13 @@ export class RoomManager {
     } while (this.rooms.has(code));
     const token = this.newToken();
     const now = this.now();
+    const participants: Participant[] = Array.from({ length: NUM_SEATS }, (_, id) => ({
+      id, kind: "bot", name: botName(id), token: null, games: 0, wins: 0,
+    }));
+    participants.push({ id: NUM_SEATS, kind: "human", name: "", token, games: 0, wins: 0 });
     const seats: Seat[] = Array.from({ length: NUM_SEATS }, (_, i) => this.botSeat(i, now));
-    seats[0] = { kind: "human", name: this.nameFor(profile.name, seats, 0), color: profile.color, token, lastSeen: now, shownAway: false };
+    seats[0] = { kind: "human", playerId: NUM_SEATS, name: this.nameFor(profile.name, seats, 0), color: profile.color, token, lastSeen: now, shownAway: false };
+    participants[NUM_SEATS]!.name = seats[0].name;
     this.rooms.set(code, {
       code,
       rev: 1,
@@ -152,6 +170,8 @@ export class RoomManager {
       botLevel: prefs.botLevel ?? "normal",
       games: 0,
       wins: new Array<number>(NUM_SEATS).fill(0),
+      participants,
+      gameParticipants: new Set(),
       lastWinner: null,
       game: null,
       dealCode: null,
@@ -162,7 +182,7 @@ export class RoomManager {
     return { code, token };
   }
 
-  /** Takes a seat. With a token from an earlier visit, takes the same seat back. */
+  /** Takes a seat, retaining a returning player's room stats. */
   join(code: string, profile: Profile, token?: string): { token: string } {
     const room = this.room(code);
     const now = this.now();
@@ -173,21 +193,33 @@ export class RoomManager {
       seat.lastSeen = now;
       seat.name = this.nameFor(profile.name, room.seats, existing);
       seat.color = profile.color;
+      room.participants[seat.playerId]!.name = seat.name;
       this.refreshAway(room);
       this.touch(room);
       return { token: seat.token! };
     }
     const free = room.seats.findIndex((s) => s.kind === "bot");
     if (free < 0) throw new RoomError(409, "conflict", "This room is full.");
-    const newToken = this.newToken();
+    let participant = token ? room.participants.find((p) => p.token !== null && safeEqual(p.token, token)) : undefined;
+    if (!participant) {
+      if (room.participants.length - NUM_SEATS >= MAX_ROOM_HUMANS) {
+        throw new RoomError(429, "rate_limited", "This room has reached its player history limit.");
+      }
+      participant = { id: room.participants.length, kind: "human", name: "", token: this.newToken(), games: 0, wins: 0 };
+      room.participants.push(participant);
+    }
+    const newToken = participant.token!;
     room.seats[free] = {
       kind: "human",
+      playerId: participant.id,
       name: this.nameFor(profile.name, room.seats, free),
       color: profile.color,
       token: newToken,
       lastSeen: now,
       shownAway: false,
     };
+    participant.name = room.seats[free]!.name;
+    if (room.phase === "playing") room.gameParticipants.add(participant.id);
     this.touch(room);
     return { token: newToken };
   }
@@ -196,6 +228,7 @@ export class RoomManager {
     const room = this.room(code);
     const seat = this.auth(room, token);
     room.seats[seat] = this.botSeat(seat, this.now());
+    if (room.phase === "playing") room.gameParticipants.add(room.seats[seat]!.playerId);
     if (!room.seats.some((s) => s.kind === "human")) {
       this.deleteRoom(room);
       return;
@@ -210,6 +243,7 @@ export class RoomManager {
     const seat = this.auth(room, token);
     room.seats[seat]!.name = this.nameFor(profile.name, room.seats, seat);
     room.seats[seat]!.color = profile.color;
+    room.participants[room.seats[seat]!.playerId]!.name = room.seats[seat]!.name;
     this.touch(room);
   }
 
@@ -247,6 +281,7 @@ export class RoomManager {
     }
     const game = newGame({ seed, leader, rules: room.rules });
     room.game = game;
+    room.gameParticipants = new Set(room.seats.map((seat) => seat.playerId));
     room.dealCode = encodeDeal({ seed, leader });
     this.push(room, "deal", -1, false, game);
     if (game.winner !== null) this.finish(room);
@@ -377,7 +412,7 @@ export class RoomManager {
   }
 
   private botSeat(index: number, now: number): Seat {
-    return { kind: "bot", name: botName(index), color: null, token: null, lastSeen: now, shownAway: false };
+    return { kind: "bot", playerId: index, name: botName(index), color: null, token: null, lastSeen: now, shownAway: false };
   }
 
   private nameFor(wanted: string, seats: readonly Seat[], self: number): string {
@@ -425,6 +460,8 @@ export class RoomManager {
     const winner = room.game!.winner!;
     room.games++;
     room.wins[winner]!++;
+    for (const id of room.gameParticipants) room.participants[id]!.games++;
+    room.participants[room.seats[winner]!.playerId]!.wins++;
     room.lastWinner = winner;
     room.phase = "over";
   }
@@ -464,6 +501,7 @@ export class RoomManager {
       phase: room.phase,
       seats: room.seats.map((s, i) => ({
         kind: s.kind,
+        playerId: s.playerId,
         name: s.name,
         color: s.color,
         away: s.shownAway,
@@ -473,6 +511,12 @@ export class RoomManager {
       settings: { rules: room.rules, botLevel: room.botLevel },
       games: room.games,
       wins: [...room.wins],
+      playerStats: room.participants
+        .filter((p) => p.kind === "human" || p.games > 0 || room.seats.some((s) => s.playerId === p.id))
+        .map((p) => ({
+          id: p.id, kind: p.kind, name: p.name, games: p.games, wins: p.wins,
+          present: room.seats.some((s) => s.playerId === p.id),
+        })),
       dealCode: room.dealCode,
     };
   }

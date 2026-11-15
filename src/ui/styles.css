@@ -57,12 +57,53 @@ input:focus-visible {
 }
 
 .logo {
+  position: relative;
   margin: 0;
   font-family: "VT323", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 1.7rem;
   font-weight: 400;
   letter-spacing: 0.04em;
   line-height: 1;
+}
+
+.logo-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.logo-smile {
+  position: absolute;
+  visibility: hidden;
+  transition: visibility 0s;
+  white-space: pre;
+}
+
+@media (hover: hover) {
+  .logo-button:hover .logo-smile {
+    visibility: visible;
+    transition-delay: 1s;
+  }
+}
+
+.logo-button:focus-visible .logo-smile {
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.logo-surprise {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 1;
+  padding: 4px 6px;
+  border: 1px solid #000;
+  background: #fff;
+  font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .topbar-center {
@@ -502,33 +543,42 @@ button.card:focus-visible {
   gap: 8px;
 }
 
-.code-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
 .code-label {
   display: block;
   font-size: 0.75rem;
   color: var(--muted);
 }
 
-.menu .code {
-  min-height: 0;
-  min-width: 0;
-  padding: 2px 6px;
-  border: none;
-  font-size: 0.9rem;
-  letter-spacing: 0.08em;
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
+.info-label {
+  position: relative;
+  align-self: flex-start;
 }
 
-.menu .code:hover {
-  background: #000;
-  color: #fff;
+.menu .info-trigger {
+  min-height: 32px;
+  min-width: 0;
+  padding: 2px 0;
+  border: 0;
+  color: inherit;
+  text-align: left;
+}
+
+.menu .info-trigger.code-label {
+  color: var(--muted);
+}
+
+.info-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 2;
+  width: min(240px, 70vw);
+  padding: 8px;
+  border: 1px solid #000;
+  background: #fff;
+  color: #000;
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 
 .menu-pair {
@@ -583,7 +633,7 @@ button.card:focus-visible {
 }
 
 .rules .tip {
-  margin-bottom: 8px;
+  margin-top: 12px;
   padding-left: 8px;
   border-left: 2px solid var(--accent);
 }
