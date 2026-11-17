@@ -9,7 +9,7 @@ const POSITIONS = ["bottom", "left", "top", "right"] as const;
 export function Entry({ entry }: { entry: HistoryEntry }) {
   return (
     <>
-      <Name seat={entry.seat} /> {entry.combo ? `played ${cardsLabel(entry.combo.cards)}` : "passed"}
+      <Name seat={entry.seat} /> {entry.combo ? cardsLabel(entry.combo.cards) : "passed"}
     </>
   );
 }
@@ -77,7 +77,7 @@ export function Felt({ view, showLog }: { view: PlayerView; showLog: boolean }) 
       {table ? (
         <div className="played" key={history.length}>
           <div className="played-label">
-            <Name seat={table.seat} /> · {describeCombo(table.combo)}
+            {describeCombo(table.combo)}
           </div>
           <div className="played-cards" role="region" aria-label="Played cards, scroll to see more" tabIndex={0}>
             {table.combo.cards.map((c) => (

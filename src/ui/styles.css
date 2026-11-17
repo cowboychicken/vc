@@ -7,6 +7,12 @@
   --accent: #12304d;
 }
 
+@property --card-w {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -42,6 +48,7 @@ select:focus-visible {
 .app {
   display: flex;
   flex-direction: column;
+  container-type: inline-size;
   height: 100dvh;
   max-width: 960px;
   margin: 0 auto;
@@ -162,6 +169,11 @@ select:focus-visible {
 }
 
 /* Board */
+.board,
+.player {
+  --card-w: min(64px, calc((100cqw - 8px) / 6.8));
+}
+
 .board {
   flex: 1;
   min-height: 0;
@@ -268,17 +280,16 @@ select:focus-visible {
   max-width: 100%;
   overflow-x: auto;
   scrollbar-width: thin;
-  --played-w: min(64px, 46cqw);
 }
 
 .played-cards .card.small {
-  --w: var(--played-w);
+  --w: var(--card-w);
   flex: 0 0 var(--w);
   min-width: 0;
 }
 
 .played-cards .card.small + .card.small {
-  margin-left: calc(var(--played-w) * -0.32);
+  margin-left: calc(var(--card-w) * -0.32);
 }
 
 .ticker {
@@ -289,6 +300,11 @@ select:focus-visible {
   font-size: 0.7rem;
   color: var(--muted);
   min-height: 3.6em;
+}
+
+.ticker .nm {
+  font-size: inherit;
+  font-weight: inherit;
 }
 
 /* Cards */
@@ -365,10 +381,6 @@ button.card:focus-visible {
   border-top: 3px solid #ddd;
 }
 
-.hand {
-  --card-w: min(64px, calc((100cqw - 8px) / 6.8));
-}
-
 .player.active {
   border-top-color: #000;
 }
@@ -398,6 +410,10 @@ button.card:focus-visible {
   text-align: center;
   min-height: 1.4em;
   font-size: 0.9rem;
+}
+.status-name {
+  font-family: "VT323", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 1.3em;
 }
 .status.warn,
 .turn-clock.urgent {
@@ -1271,7 +1287,8 @@ button.card:focus-visible {
     --opp-w: 112px;
   }
 
-  .hand {
+  .board,
+  .player {
     --card-w: min(80px, calc((100cqw - 8px) / 6.8));
   }
 }

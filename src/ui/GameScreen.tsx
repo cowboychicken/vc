@@ -18,7 +18,7 @@ import { CardFace } from "./CardFace";
 import { Felt, GameOver, Opponent } from "./Board";
 import { Logo } from "./Logo";
 import { dealtCounts, FINISH_MS, openingMessage, type DealPresentation } from "./dealPresentation";
-import { nameOf, possessiveOf, seatAt, usePlayers } from "./players";
+import { nameOf, seatAt, usePlayers } from "./players";
 import { sortHand, type HandSort, type Settings } from "./settings";
 import "./game-presentation.css";
 
@@ -165,13 +165,17 @@ export function GameScreen({
     }
   };
 
-  let status: string;
+  let status: ReactNode;
   let tone: "info" | "warn" | "ok" = "info";
   if (opening.phase === "dealing") status = "Dealing…";
-  else if (opening.phase === "intro") status = openingMessage(view, nameOf(players, view.turn));
+  else if (opening.phase === "intro") {
+    status = !view.instantWin && view.turn !== view.seat
+      ? <><span className="status-name">{nameOf(players, view.turn)}</span> starts!</>
+      : openingMessage(view, nameOf(players, view.turn));
+  }
   else if (view.winner !== null) status = "Game over.";
   else if (playbackPending && view.turn === view.seat) status = "Catching up…";
-  else if (!myTurn) status = turnShown ? `${nameOf(players, view.turn)} is playing…` : "";
+  else if (!myTurn) status = turnShown ? <><span className="status-name">{nameOf(players, view.turn)}</span> is playing…</> : "";
   else if (hasSelection && reason) {
     status = reason;
     tone = "warn";
@@ -183,7 +187,9 @@ export function GameScreen({
     status =
       legalCount === 0
         ? "Nothing in your hand beats that. Pass."
-        : `Beat ${possessiveOf(players, view.table.seat)} ${describeCombo(view.table.combo)}.`;
+        : view.table.seat === players.me
+          ? `Beat your ${describeCombo(view.table.combo)}.`
+          : <>Beat <span className="status-name">{nameOf(players, view.table.seat)}</span>'s {describeCombo(view.table.combo)}.</>;
   } else if (view.openingRequired) status = `You hold ${cardLabel(THREE_OF_SPADES)}. Lead with it.`;
   else status = "Your lead. Play any combination.";
 
