@@ -32,9 +32,7 @@ export function LandingPage({ onQuickPlay, onCreateRoom, onJoinRoom, onToggleDar
           <p className="landing-kicker">FREE BROWSER CARD GAME</p>
           <h2 id="landing-title">Play Tiến Lên Miền Nam online</h2>
           <p className="landing-intro">
-            VC13.gg is a free way to play Tiến Lên, also written Tien Len: the Vietnamese 13-card game known as
-            Tiến Lên Miền Nam or Thirteen. Quick Play matches you with other players; create a room to invite
-            friends. Open seats are filled by bots.
+            VC13.gg is a free way to play Tiến Lên, the Vietnamese 13-card game also known as Thirteen.
           </p>
           <div className="landing-actions">
             <button type="button" className="primary" onClick={onQuickPlay}>
@@ -51,7 +49,7 @@ export function LandingPage({ onQuickPlay, onCreateRoom, onJoinRoom, onToggleDar
               join();
             }}
           >
-            <label htmlFor="landing-room-code">Join a multiplayer room by code</label>
+            <label htmlFor="landing-room-code">Join friends</label>
             <div className="code-form">
               <input
                 id="landing-room-code"
@@ -79,8 +77,7 @@ export function LandingPage({ onQuickPlay, onCreateRoom, onJoinRoom, onToggleDar
             the table; pass when you do not want to play. The first player to get rid of every card wins.
           </p>
           <p>
-            VC13.gg follows the Southern Vietnamese rules, Tiến Lên Miền Nam. Join a multiplayer game or create a
-            room and invite friends; bots fill any empty seats. No account or download is required.
+            No account or download is required.
           </p>
         </section>
       </main>

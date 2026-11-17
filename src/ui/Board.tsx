@@ -24,6 +24,15 @@ export function Opponent({
   const away = players.away[seat] === true;
   const position = POSITIONS[relSeat(players, seat)];
   const cls = ["opp", `opp-${position}`, active ? "active" : "", passed ? "passed" : ""].join(" ");
+  let playedThisRound = false;
+  let passes = 0;
+  for (const entry of view.history) {
+    if (entry.combo && entry.seat === seat) playedThisRound = true;
+    if (!entry.combo && ++passes === 3) {
+      playedThisRound = false;
+      passes = 0;
+    }
+  }
   const status =
     dealing
       ? ""
@@ -32,21 +41,26 @@ export function Opponent({
       : view.winner !== null
         ? ""
         : active
-          ? "Thinking…"
+          ? "Playing…"
           : passed
             ? "Passed"
             : away
               ? "Away"
-              : count <= 2
-                ? "Almost out!"
-                : "";
+              : view.table && playedThisRound
+                ? "Played"
+                : "Waiting";
   return (
     <div className={cls} data-testid={`opponent-${seat}`}>
       <div className="opp-name">
         <Name seat={seat} />
       </div>
-      <div className="opp-count" role="img" aria-label={`${count} cards left`}>
-        {count}
+      <div className="opp-count" role="img" aria-label={`${count} ${count === 1 ? "card" : "cards"} left`}>
+        <svg className="opp-card-icon" viewBox="0 0 16 22" fill="none" stroke="currentColor" aria-hidden="true">
+          <rect x="1" y="1" width="14" height="20" />
+          <rect x="3" y="3" width="10" height="16" strokeWidth="0.8" />
+          <path d="M3 7 7 3M3 12l9-9M3 17 13 7M6 19l7-7M11 19l2-2" strokeWidth="0.8" />
+        </svg>
+        <span>{count} {count === 1 ? "card" : "cards"}</span>
       </div>
       <div className="opp-status" aria-live="polite">
         {status}
@@ -65,7 +79,7 @@ export function Felt({ view, showLog }: { view: PlayerView; showLog: boolean }) 
           <div className="played-label">
             <Name seat={table.seat} /> · {describeCombo(table.combo)}
           </div>
-          <div className="played-cards">
+          <div className="played-cards" role="region" aria-label="Played cards, scroll to see more" tabIndex={0}>
             {table.combo.cards.map((c) => (
               <CardFace key={c} card={c} small />
             ))}

@@ -142,6 +142,7 @@ export function OnlineApp({ intent, settings, onToggleDarkMode, onSettings, prof
         view={shown.view}
         turnShown={presenter.lit}
         settings={settings}
+        onSettings={onSettings}
         record={record}
         recordContent={<RoomStats record={record} players={room.playerStats} me={myId} />}
         opening={handle.opening}
@@ -155,17 +156,20 @@ export function OnlineApp({ intent, settings, onToggleDarkMode, onSettings, prof
         onOpenRules={() => setRulesOpen(true)}
         headerCenter={<CopyCode text={formatRoomCode(room.code)} label="Room code" />}
         gameOverActions={
-          room.phase !== "over" ? (
-            <p role="status">Starting…</p>
-          ) : isHost ? (
-            <button type="button" className="primary" onClick={handle.start} autoFocus>
-              Start next game
-            </button>
-          ) : (
-            <p role="status" data-testid="waiting">
-              Waiting for {hostName} to start the next game…
-            </p>
-          )
+          <>
+            {room.phase !== "over" ? (
+              <p role="status">Starting…</p>
+            ) : isHost ? (
+              <button type="button" className="primary" onClick={handle.start} autoFocus>
+                Start next game
+              </button>
+            ) : (
+              <p role="status" data-testid="waiting">
+                Waiting for {hostName} to start the next game…
+              </p>
+            )}
+            <button type="button" onClick={leave}>Back to menu</button>
+          </>
         }
       >
         {menu}
@@ -268,7 +272,7 @@ function SettingsTab({
       </p>
 
       <PersonalRows settings={settings} onSettings={onSettings} />
-      <p className="note">Speed, hints, the move log and dark mode are saved on this device.</p>
+      <p className="note">Personal settings are saved on this device.</p>
     </div>
   );
 }

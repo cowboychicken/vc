@@ -33,7 +33,8 @@ button {
 }
 
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible {
   outline: 2px solid #000;
   outline-offset: 2px;
 }
@@ -54,6 +55,37 @@ input:focus-visible {
   align-items: baseline;
   padding-bottom: 6px;
   border-bottom: 1px solid #000;
+}
+
+.game-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+}
+
+.game-topbar .meta {
+  display: contents;
+}
+
+.game-topbar .logo,
+.game-topbar .topbar-center,
+.game-topbar .icon-btn {
+  flex-shrink: 0;
+}
+
+.game-topbar .room-stats,
+.game-topbar .meta > [data-testid="record"] {
+  min-width: 0;
+}
+
+.game-topbar .room-stats-trigger,
+.game-topbar .meta > [data-testid="record"] {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .logo {
@@ -110,10 +142,10 @@ input:focus-visible {
 }
 
 .icon-btn {
-  width: 32px;
+  min-width: 32px;
   height: 32px;
-  padding: 0;
-  border: 1px solid #000;
+  padding: 0 6px;
+  border: 0;
   border-radius: 0;
   background: #fff;
   font-weight: 700;
@@ -123,6 +155,10 @@ input:focus-visible {
 .icon-btn:hover {
   background: #000;
   color: #fff;
+}
+
+.icon-btn svg {
+  vertical-align: middle;
 }
 
 /* Board */
@@ -146,7 +182,7 @@ input:focus-visible {
   gap: 2px;
   width: var(--opp-w);
   padding: 8px 4px;
-  border: 1px solid #000;
+  border: 0;
   text-align: center;
 }
 
@@ -169,7 +205,6 @@ input:focus-visible {
 }
 
 .opp.passed {
-  border-style: dashed;
   color: var(--muted);
 }
 
@@ -178,9 +213,19 @@ input:focus-visible {
 }
 
 .opp-count {
-  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
   font-weight: 700;
   line-height: 1;
+  white-space: nowrap;
+}
+
+.opp-card-icon {
+  width: 14px;
+  height: 20px;
+  flex: none;
 }
 
 .opp-status {
@@ -219,8 +264,21 @@ input:focus-visible {
 
 .played-cards {
   display: flex;
-  justify-content: center;
+  justify-content: safe center;
   max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  --played-w: min(64px, 46cqw);
+}
+
+.played-cards .card.small {
+  --w: var(--played-w);
+  flex: 0 0 var(--w);
+  min-width: 0;
+}
+
+.played-cards .card.small + .card.small {
+  margin-left: calc(var(--played-w) * -0.32);
 }
 
 .ticker {
@@ -315,8 +373,28 @@ button.card:focus-visible {
   border-top-color: #000;
 }
 
+.player-heading {
+  display: grid;
+  /* Match the empty right track to Sort so the message stays centered. */
+  grid-template-columns: 56px minmax(0, 1fr) 56px;
+  align-items: center;
+  gap: 4px;
+}
+
+.sort-button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 .status {
-  margin: 0 0 2px;
+  margin: 0;
   text-align: center;
   min-height: 1.4em;
   font-size: 0.9rem;
@@ -329,8 +407,22 @@ button.card:focus-visible {
 .actions {
   display: flex;
   gap: 8px;
-  justify-content: center;
+  align-items: center;
   padding: 8px 0;
+}
+
+.action-buttons {
+  display: flex;
+  flex: 1;
+  max-width: 360px;
+  margin-inline: auto;
+  gap: 8px;
+}
+
+.hand-count {
+  color: var(--muted);
+  font-size: 0.7rem;
+  white-space: nowrap;
 }
 
 .actions button,
@@ -343,6 +435,11 @@ button.card:focus-visible {
   background: #fff;
   color: #000;
   cursor: pointer;
+}
+
+.action-buttons button {
+  flex: 1;
+  min-height: 48px;
 }
 
 .actions button.primary,
@@ -744,7 +841,8 @@ button.card:focus-visible {
 }
 
 .theme-dark button:not(.swatch):not(.logo-button):not(.card),
-.theme-dark input {
+.theme-dark input,
+.theme-dark select {
   border-color: #aaa;
   background: #171717;
   color: #f5f5f5;
@@ -832,7 +930,8 @@ button.card:focus-visible {
 }
 
 .theme-dark button:focus-visible,
-.theme-dark input:focus-visible {
+.theme-dark input:focus-visible,
+.theme-dark select:focus-visible {
   outline-color: #fff;
 }
 
@@ -1207,22 +1306,32 @@ button.card:focus-visible {
 }
 
 @media (max-width: 420px) {
+  .action-buttons {
+    gap: 6px;
+  }
+
   .actions button {
-    padding: 0 10px;
-    min-width: 56px;
+    padding: 0 4px;
+    min-width: 44px;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .game-topbar .logo {
+    font-size: 1.45rem;
   }
 
-  /* Room for the Rules button next to the menu button: sides size to their content, not equal thirds. */
-  .topbar {
-    grid-template-columns: auto 1fr auto;
+  .game-topbar .topbar-center {
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
   }
 
-  .topbar-center {
-    justify-self: center;
+  .game-topbar .meta {
+    font-size: 0.75rem;
   }
 
-  .meta {
-    gap: 8px;
-    white-space: nowrap;
+  .game-topbar .icon-btn {
+    padding: 0 4px;
   }
 }

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { heuristicBot, randomBot } from "../src/bots";
 import { applyMove, decodeDeal, encodeDeal, legalMoves } from "../src/engine";
 import { HUMAN, initSession, isTurnShown, reduceSession, type Session } from "../src/ui/session";
-import { DEFAULT_SETTINGS, parseSettings } from "../src/ui/settings";
+import { DEFAULT_SETTINGS, parseSettings, sortHand } from "../src/ui/settings";
+import { cs } from "./helpers";
 
 /** Drives a session to the end: bots via the reducer, the human by taking its first legal move. */
 function playToEnd(start: Session): Session {
@@ -162,7 +163,20 @@ describe("settings", () => {
   });
 
   it("keeps valid stored values", () => {
-    const stored = { botSpeed: "fast", botLevel: "easy", hints: false, moveLog: false, darkMode: true, bombsBeatAnything: true };
+    const stored = { botSpeed: "fast", botLevel: "easy", hints: false, handSort: "suit", moveLog: false, darkMode: true, bombsBeatAnything: true };
     expect(parseSettings(JSON.stringify(stored))).toEqual(stored);
+  });
+
+  it("defaults the hand sort for older or invalid saved settings", () => {
+    expect(parseSettings(JSON.stringify({ hints: false })).handSort).toBe("rank-asc");
+    expect(parseSettings(JSON.stringify({ handSort: "invalid" })).handSort).toBe("rank-asc");
+  });
+
+  it("sorts by game rank in either direction or groups suits without changing the hand", () => {
+    const hand = cs("4♣ 2♥ 3♣ 4♠ 3♠");
+    expect(sortHand(hand, "rank-asc")).toEqual(cs("3♠ 3♣ 4♠ 4♣ 2♥"));
+    expect(sortHand(hand, "rank-desc")).toEqual(cs("2♥ 4♣ 4♠ 3♣ 3♠"));
+    expect(sortHand(hand, "suit")).toEqual(cs("3♠ 4♠ 3♣ 4♣ 2♥"));
+    expect(hand).toEqual(cs("4♣ 2♥ 3♣ 4♠ 3♠"));
   });
 });

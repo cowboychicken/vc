@@ -19,11 +19,21 @@ import { Felt, GameOver, Opponent } from "./Board";
 import { Logo } from "./Logo";
 import { dealtCounts, FINISH_MS, openingMessage, type DealPresentation } from "./dealPresentation";
 import { nameOf, possessiveOf, seatAt, usePlayers } from "./players";
-import type { Settings } from "./settings";
+import { sortHand, type HandSort, type Settings } from "./settings";
 import "./game-presentation.css";
 
 /** Clicking anything else, like the table or empty space, drops the current selection. */
 const KEEPS_SELECTION = "button, a, input, .overlay";
+
+const HAND_SORTS: Record<HandSort, { next: HandSort; symbol: string; label: string }> = {
+  "rank-asc": { next: "rank-desc", symbol: "↑", label: "rank ascending" },
+  "rank-desc": { next: "suit", symbol: "↓", label: "rank descending" },
+  suit: { next: "rank-asc", symbol: "♠", label: "suit" },
+};
+
+export function nextHandSort(order: HandSort): HandSort {
+  return HAND_SORTS[order].next;
+}
 
 interface Props {
   /** The game from my seat: my hand, everyone's card counts, the table. */
@@ -31,6 +41,7 @@ interface Props {
   /** False while a bot's turn has not been shown yet, so its highlight lands just before its card. */
   turnShown: boolean;
   settings: Settings;
+  onSettings: (settings: Settings) => void;
   /** Shown in the header, like "Won 1 of 3". */
   record: string;
   recordContent?: ReactNode;
@@ -56,6 +67,7 @@ export function GameScreen({
   view,
   turnShown,
   settings,
+  onSettings,
   record,
   recordContent,
   opening,
@@ -179,10 +191,12 @@ export function GameScreen({
   const displayedView = openingActive
     ? { ...view, hand: view.hand.slice(0, counts[view.seat]), handSizes: counts, winner: null }
     : view;
+  const displayedHand = sortHand(displayedView.hand, settings.handSort);
+  const handSort = HAND_SORTS[settings.handSort];
 
   return (
     <div className="app">
-      <header className="topbar">
+      <header className="topbar game-topbar">
         <Logo onToggleDarkMode={onToggleDarkMode} />
         {headerCenter && (
           <span className="topbar-center" data-testid="room-code">
@@ -199,16 +213,20 @@ export function GameScreen({
             title="Rules"
             onClick={onOpenRules}
           >
-            ?
+            Rules
           </button>
           <button
             type="button"
             className="icon-btn"
             aria-label="Menu and settings"
             aria-haspopup="dialog"
+            title="Menu and settings"
             onClick={onOpenMenu}
           >
-            i
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+              <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
+              <path d="m19.4 15 1.1 1.9-2.1 2.1-1.9-1.1a8 8 0 0 1-2 .8l-.5 2.2h-3l-.5-2.2a8 8 0 0 1-2-.8l-1.9 1.1-2.1-2.1L5.6 15a8 8 0 0 1-.8-2L2.6 12.5v-3L4.8 9a8 8 0 0 1 .8-2L4.5 5.1 6.6 3l1.9 1.1a8 8 0 0 1 2-.8l.5-2.2h3l.5 2.2a8 8 0 0 1 2 .8L18.4 3l2.1 2.1L19.4 7a8 8 0 0 1 .8 2l2.2.5v3l-2.2.5a8 8 0 0 1-.8 2Z" transform="translate(0 1)" />
+            </svg>
           </button>
         </div>
       </header>
@@ -224,30 +242,44 @@ export function GameScreen({
       </main>
 
       <section className={`player${myTurn ? " active" : ""}`} aria-label="Your hand">
-        <p className={`status ${tone}`} role="status" data-testid="status">
-          {status}
-          {myTurn && turnClock}
-        </p>
+        <div className="player-heading">
+          <button
+            type="button"
+            className="sort-button"
+            aria-label={`Sort hand: ${handSort.label}. Next: ${HAND_SORTS[handSort.next].label}.`}
+            title={`Sort: ${handSort.label}`}
+            onClick={() => onSettings({ ...settings, handSort: nextHandSort(settings.handSort) })}
+          >
+            Sort {handSort.symbol}
+          </button>
+          <p className={`status ${tone}`} role="status" data-testid="status">
+            {status}
+            {myTurn && turnClock}
+          </p>
+        </div>
         <div className="hand" data-testid="hand">
-          {displayedView.hand.map((c) => (
+          {displayedHand.map((c) => (
             <CardFace key={c} card={c} selected={selected.includes(c)} onToggle={toggle} />
           ))}
         </div>
         <div className="actions">
-          <button type="button" onClick={doPass} disabled={!myTurn || !canPass(view)}>
-            Pass
-          </button>
-          {settings.hints && (
-            <button type="button" onClick={doHint} disabled={!myTurn}>
-              Hint
+          <span className="hand-count">{displayedHand.length} {displayedHand.length === 1 ? "card" : "cards"}</span>
+          <div className="action-buttons">
+            <button type="button" onClick={doPass} disabled={!myTurn || !canPass(view)}>
+              Pass
             </button>
-          )}
-          <button type="button" onClick={clearSelection} disabled={!hasSelection}>
-            Clear
-          </button>
-          <button type="button" className="primary" onClick={doPlay} disabled={!canPlay}>
-            Play
-          </button>
+            {settings.hints && (
+              <button type="button" onClick={doHint} disabled={!myTurn}>
+                Hint
+              </button>
+            )}
+            <button type="button" onClick={clearSelection} disabled={!hasSelection}>
+              Clear
+            </button>
+            <button type="button" className="primary" onClick={doPlay} disabled={!canPlay}>
+              Play
+            </button>
+          </div>
         </div>
       </section>
 

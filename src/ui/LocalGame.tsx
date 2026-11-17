@@ -101,6 +101,7 @@ export function LocalGame({ settings, onSettings, onOnline }: Props) {
         view={view}
         turnShown={turnShown}
         settings={settings}
+        onSettings={updateSettings}
         record={`Won ${session.won} of ${session.played}`}
         opening={opening}
         reducedMotion={reducedMotion}
