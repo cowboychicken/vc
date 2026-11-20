@@ -411,9 +411,30 @@ button.card:focus-visible {
   min-height: 1.4em;
   font-size: 0.9rem;
 }
+.turn-indicator {
+  display: inline-block;
+  margin-inline: 3px;
+  color: #105397;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.theme-dark .turn-indicator {
+  color: var(--accent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .turn-indicator {
+    animation: turn-pulse 1.2s ease-in-out;
+  }
+}
+@keyframes turn-pulse {
+  50% { transform: scale(1.2); }
+}
 .status-name {
+  display: inline-block;
+  max-width: 100%;
   font-family: "VT323", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 1.3em;
+  overflow-wrap: anywhere;
 }
 .status.warn,
 .turn-clock.urgent {
@@ -532,6 +553,13 @@ button.card:focus-visible {
   gap: 8px;
   justify-content: center;
   flex-wrap: wrap;
+}
+
+.dialog-actions .restart-note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 
 /* Names and the colour picker */

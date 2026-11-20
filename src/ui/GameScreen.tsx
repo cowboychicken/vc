@@ -259,6 +259,7 @@ export function GameScreen({
             Sort {handSort.symbol}
           </button>
           <p className={`status ${tone}`} role="status" data-testid="status">
+            {myTurn && <><span className="turn-indicator">YOUR TURN</span>{" · "}</>}
             {status}
             {myTurn && turnClock}
           </p>

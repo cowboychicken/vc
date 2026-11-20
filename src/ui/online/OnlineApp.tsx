@@ -1,5 +1,5 @@
 import { type ReactNode, useMemo, useState } from "react";
-import { type Profile, type RoomInfo, formatRoomCode } from "../../net/protocol";
+import { NEXT_GAME_DELAY_MS, type Profile, type RoomInfo, formatRoomCode } from "../../net/protocol";
 import { CopyCode } from "../CopyCode";
 import { GameScreen } from "../GameScreen";
 import { Logo } from "../Logo";
@@ -117,7 +117,6 @@ export function OnlineApp({ intent, settings, onToggleDarkMode, onSettings, prof
   ];
   const menu = menuOpen && <MenuDialog tabs={tabs} onClose={closeMenu} />;
   const shown = presenter.shown;
-  const hostName = room.seats[room.host]?.name ?? "the host";
   const myId = room.seats[seat]!.playerId;
   const myStats = room.playerStats.find((player) => player.id === myId);
   if (!myStats) {
@@ -159,14 +158,17 @@ export function OnlineApp({ intent, settings, onToggleDarkMode, onSettings, prof
           <>
             {room.phase !== "over" ? (
               <p role="status">Starting…</p>
-            ) : isHost ? (
-              <button type="button" className="primary" onClick={handle.start} autoFocus>
-                Start next game
-              </button>
             ) : (
-              <p role="status" data-testid="waiting">
-                Waiting for {hostName} to start the next game…
-              </p>
+              <>
+                <p className="restart-note" role="status">
+                  Next game starts automatically {NEXT_GAME_DELAY_MS / 1000} seconds after the game ends.
+                </p>
+                {isHost && (
+                  <button type="button" className="primary" onClick={handle.start} autoFocus>
+                    Start next game
+                  </button>
+                )}
+              </>
             )}
             <button type="button" onClick={leave}>Back to menu</button>
           </>

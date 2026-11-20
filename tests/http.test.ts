@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Api, type ApiOptions, createApi } from "../server/app";
+import { RoomManager } from "../server/rooms";
 import { createStatic } from "../server/static";
-import { legalMovesForView } from "../src/engine";
+import { encodeDeal, legalMovesForView, newGame } from "../src/engine";
 import { type JoinResponse, PROTOCOL_VERSION, type UpdateResponse, VERSION_HEADER } from "../src/net/protocol";
 
 interface Harness {
@@ -341,6 +342,41 @@ describe("room API", () => {
     expect(state.room.games).toBe(1);
     const next = await call<UpdateResponse>(h.base, "POST", `/api/rooms/${code}/start`, { token, body: { since: -1 } });
     expect(next.body!.room.phase === "playing" || next.body!.room.phase === "over").toBe(true);
+  });
+
+  it("deals a new game to a Quick Play joiner in a finished room after 20 seconds", async () => {
+    let now = 1_000_000;
+    let instantSeed = 0;
+    while (newGame({ seed: instantSeed }).winner === null) instantSeed++;
+    let normalSeed = 0;
+    while (newGame({ seed: normalSeed }).winner !== null) normalSeed++;
+    const manager = new RoomManager({
+      now: () => now,
+      awayMs: 1e9,
+      randomInt: (max) => max === 2 ** 32 ? normalSeed : 0,
+    });
+    const { code, token } = manager.create({ name: "Ann", color: "red" });
+    manager.start(code, token, encodeDeal({ seed: instantSeed }));
+    const isolated = await start({ manager, now: () => now });
+    try {
+      now += 19_999;
+      const joined = await call<JoinResponse & { created: boolean }>(isolated.base, "POST", "/api/rooms/quickplay", { body: bo });
+      expect(joined.status).toBe(200);
+      expect(joined.body).toMatchObject({ created: false, room: { code, phase: "over" } });
+      const guest = joined.body!;
+      const since = guest.frames[guest.frames.length - 1]!.n;
+      expect(manager.sweep()).not.toContain(code);
+      now++;
+      expect(manager.sweep()).toContain(code);
+      const update = await call<UpdateResponse>(isolated.base, "GET", `/api/rooms/${code}/updates?since=${since}&rev=${guest.room.rev}&wait=0`, { token: guest.token });
+      expect(update.status).toBe(200);
+      expect(update.body!.room.phase).toBe("playing");
+      expect(update.body!.frames[0]).toMatchObject({ kind: "deal", view: { seat: guest.seat, revealed: null } });
+      expect(update.body!.frames[0]!.view.hand).toHaveLength(13);
+      expect(JSON.stringify(update.body)).not.toContain('"hands"');
+    } finally {
+      await isolated.close();
+    }
   });
 
   it("never lets a client pick or replay a deal", async () => {

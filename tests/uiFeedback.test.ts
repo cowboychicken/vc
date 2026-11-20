@@ -58,12 +58,12 @@ describe("game screen cards", () => {
 describe("game text", () => {
   const players = { ...LOCAL_PLAYERS, names: ["You", "James", "Bot Two", "Bot Three"] };
 
-  function renderScreen(current: PlayerView, phase: "intro" | "ready" = "ready") {
+  function renderScreen(current: PlayerView, phase: "dealing" | "intro" | "ready" = "ready", playbackPending = false) {
     return renderToStaticMarkup(createElement(
       PlayersContext.Provider,
       { value: players },
       createElement(GameScreen, {
-        view: current, turnShown: true, settings: DEFAULT_SETTINGS,
+        view: current, turnShown: true, settings: DEFAULT_SETTINGS, playbackPending,
         onSettings: () => {}, record: "", opening: { phase, dealt: 52 }, reducedMotion: true,
         dealCode: null, onMove: () => {}, onOpenMenu: () => {}, onOpenRules: () => {}, gameOverActions: null,
       }),
@@ -104,5 +104,15 @@ describe("game text", () => {
     const instant = renderScreen({ ...current, turn: 1, instantWin: "fourTwos" }, "intro");
     expect(instant).toContain("Instant win!");
     expect(instant).not.toContain('class="status-name"');
+  });
+
+  it("shows the turn indicator only while the player can act", () => {
+    const current = view();
+    expect(renderScreen(current)).toContain('<span class="turn-indicator">YOUR TURN</span>');
+    expect(renderScreen({ ...current, turn: 1 })).not.toContain('class="turn-indicator"');
+    expect(renderScreen(current, "ready", true)).not.toContain('class="turn-indicator"');
+    expect(renderScreen(current, "dealing")).not.toContain('class="turn-indicator"');
+    expect(renderScreen(current, "intro")).not.toContain('class="turn-indicator"');
+    expect(renderScreen({ ...current, winner: 1 })).not.toContain('class="turn-indicator"');
   });
 });

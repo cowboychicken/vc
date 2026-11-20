@@ -16,6 +16,7 @@ import {
   type ColorId,
   type ErrorCode,
   type Frame,
+  NEXT_GAME_DELAY_MS,
   NUM_SEATS,
   type Phase,
   type Profile,
@@ -100,6 +101,8 @@ interface Room {
   kickedTokens: Map<string, "host" | "idle">;
   /** The human turn being timed: `key` changes with every frame, so a new move restarts the clock. */
   turn: { key: number; seat: number; deadline: number } | null;
+  /** Automatic restart deadline for the current finished game. */
+  nextGameAt: number | null;
   gameParticipants: Set<number>;
   lastWinner: number | null;
   game: GameState | null;
@@ -185,6 +188,7 @@ export class RoomManager {
       participants,
       kickedTokens: new Map(),
       turn: null,
+      nextGameAt: null,
       gameParticipants: new Set(),
       lastWinner: null,
       game: null,
@@ -318,6 +322,11 @@ export class RoomManager {
     const room = this.room(code);
     this.requireHost(room, this.auth(room, token));
     if (room.phase === "playing") throw new RoomError(409, "conflict", "A game is already running.");
+    this.startGame(room, dealCode);
+    this.touch(room);
+  }
+
+  private startGame(room: Room, dealCode?: string): void {
     let seed: number;
     let leader: number | undefined;
     if (dealCode !== undefined && dealCode.trim() !== "") {
@@ -330,6 +339,7 @@ export class RoomManager {
       leader = room.lastWinner ?? undefined;
     }
     const game = newGame({ seed, leader, rules: room.rules });
+    room.nextGameAt = null;
     room.game = game;
     room.gameParticipants = new Set(room.seats.map((seat) => seat.playerId));
     room.dealCode = encodeDeal({ seed, leader });
@@ -339,7 +349,6 @@ export class RoomManager {
       room.phase = "playing";
       this.advanceBots(room);
     }
-    this.touch(room);
   }
 
   // --- Playing ---------------------------------------------------------------------------------
@@ -406,7 +415,7 @@ export class RoomManager {
     };
   }
 
-  /** Housekeeping for disconnected players and turn deadlines. */
+  /** Housekeeping for disconnected players, automatic starts, and turn deadlines. */
   sweep(): string[] {
     const changed: string[] = [];
     const now = this.now();
@@ -424,6 +433,10 @@ export class RoomManager {
         continue;
       }
       if (room.seats[room.host]!.kind !== "human") room.host = this.firstHuman(room, true);
+      if (room.phase === "over" && room.nextGameAt !== null && now >= room.nextGameAt) {
+        this.startGame(room);
+        dirty = true;
+      }
       if (this.advanceBots(room)) dirty = true;
       if (this.expireTurn(room)) dirty = true;
       if (!this.rooms.has(room.code)) {
@@ -505,6 +518,7 @@ export class RoomManager {
     room.participants[room.seats[winner]!.playerId]!.wins++;
     room.lastWinner = winner;
     room.phase = "over";
+    room.nextGameAt = this.now() + NEXT_GAME_DELAY_MS;
   }
 
   /** Plays for every seat that has no human in charge, until a present human is up or the game ends. */

@@ -8,6 +8,7 @@ export const VERSION_HEADER = "x-vc13-version";
 export const NUM_SEATS = 4;
 export const MAX_NAME_LENGTH = 12;
 export const POLL_SECONDS = 2;
+export const NEXT_GAME_DELAY_MS = 20_000;
 export const MAX_SAVED_ROOMS = 6;
 
 // --- Names and colours -------------------------------------------------------------------------

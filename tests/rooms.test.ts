@@ -285,6 +285,131 @@ describe("playing", () => {
   });
 });
 
+describe("automatic next game", () => {
+  const timed = () => setup({
+    awayMs: 1e9,
+    randomInt: (max) => max === 2 ** 32 ? HOST_OPENS : 0,
+  });
+
+  it("starts 20 seconds after a game ends, including for a player who joins meanwhile", () => {
+    const { manager, clock } = timed();
+    const { code, token } = manager.create(ann);
+    manager.start(code, token, encodeDeal({ seed: HOST_OPENS }));
+    playToEnd(manager, code, token);
+    const over = manager.update(code, token, -1);
+    const winner = last(over).view.winner;
+    expect(over.room.phase).toBe("over");
+
+    clock.t += 19_999;
+    expect(manager.sweep()).not.toContain(code);
+    expect(manager.peek(code)!.phase).toBe("over");
+    const guest = manager.join(code, bo);
+    expect(manager.randomJoinableRoom()).toBe(code);
+    let notifications = 0;
+    manager.subscribe(code, () => notifications++);
+
+    clock.t += 1;
+    expect(manager.sweep()).toContain(code);
+    expect(notifications).toBe(1);
+    const next = manager.update(code, guest.token, last(over).n);
+    expect(next.room.phase).toBe("playing");
+    expect(next.room.games).toBe(1);
+    expect(next.frames[0]).toMatchObject({ kind: "deal", view: { turn: winner, openingRequired: false } });
+    expect(next.frames[0]!.view.hand).toHaveLength(13);
+    expect(next.frames[0]!.view.revealed).toBeNull();
+    expect(next.room.turn).toMatchObject({ endsInMs: 29_000 });
+    expect(manager.sweep()).not.toContain(code);
+  });
+
+  it("does not restart a manually started game at the previous deadline", () => {
+    const { manager, clock } = timed();
+    const { code, token } = manager.create(ann);
+    manager.start(code, token, encodeDeal({ seed: HOST_OPENS }));
+    playToEnd(manager, code, token);
+    clock.t += 10_000;
+    manager.start(code, token, encodeDeal({ seed: HOST_OPENS, leader: 0 }));
+    const started = manager.update(code, token, -1);
+    clock.t += 10_000;
+    expect(manager.sweep()).not.toContain(code);
+    expect(manager.update(code, token, last(started).n).frames).toEqual([]);
+    expect(manager.peek(code)!.phase).toBe("playing");
+  });
+
+  it("starts a fresh 20-second delay after an instant-win deal", () => {
+    const { manager, clock } = timed();
+    const { code, token } = manager.create(ann);
+    let seed = 0;
+    while (newGame({ seed }).winner === null) seed++;
+    const instant = encodeDeal({ seed });
+    manager.start(code, token, instant);
+    clock.t += 10_000;
+    manager.start(code, token, instant);
+    const over = manager.update(code, token, -1);
+    expect(over.room.games).toBe(2);
+    clock.t += 10_000;
+    expect(manager.sweep()).not.toContain(code);
+    expect(manager.peek(code)!.phase).toBe("over");
+    clock.t += 10_000;
+    expect(manager.sweep()).toContain(code);
+    expect(manager.update(code, token, last(over).n).frames[0]!.kind).toBe("deal");
+    expect(manager.peek(code)!.phase).toBe("playing");
+  });
+
+  it("waits another 20 seconds if the automatic deal is an instant win", () => {
+    let seed = 0;
+    while (newGame({ seed }).winner === null) seed++;
+    const { manager, clock } = setup({
+      awayMs: 1e9,
+      randomInt: (max) => max === 2 ** 32 ? seed : 0,
+    });
+    const { code, token } = manager.create(ann);
+    manager.start(code, token, encodeDeal({ seed }));
+    clock.t += 20_000;
+    expect(manager.sweep()).toContain(code);
+    const over = manager.update(code, token, -1);
+    expect(over.room).toMatchObject({ phase: "over", games: 2 });
+    clock.t += 19_999;
+    expect(manager.sweep()).not.toContain(code);
+    clock.t++;
+    expect(manager.sweep()).toContain(code);
+    expect(manager.update(code, token, last(over).n).frames).toHaveLength(1);
+    expect(manager.peek(code)!.games).toBe(3);
+  });
+
+  it("removes disconnected humans before the automatic start", () => {
+    const { manager, clock } = setup({ awayMs: 5_000 });
+    const { code, token } = manager.create(ann);
+    manager.start(code, token, encodeDeal({ seed: HOST_OPENS }));
+    playToEnd(manager, code, token);
+    clock.t += 20_000;
+    expect(manager.sweep()).toContain(code);
+    expect(manager.peek(code)).toBeNull();
+  });
+
+  it("hands over an expired host before starting for a recent joiner", () => {
+    const { manager, clock } = setup({
+      awayMs: 5_000,
+      randomInt: (max) => max === 2 ** 32 ? HOST_OPENS : 0,
+    });
+    const { code, token } = manager.create(ann);
+    let seed = 0;
+    while (newGame({ seed }).winner === null) seed++;
+    manager.start(code, token, encodeDeal({ seed }));
+    clock.t += 15_000;
+    manager.seen(code, token);
+    clock.t += 4_999;
+    expect(manager.randomJoinableRoom()).toBe(code);
+    const guest = manager.join(code, bo);
+    clock.t++;
+    expect(manager.sweep()).toContain(code);
+    const room = manager.update(code, guest.token, -1).room;
+    expect(room.phase).toBe("playing");
+    expect(room.host).toBe(1);
+    expect(room.seats[0]!.kind).toBe("bot");
+    expect(room.seats[1]!.kind).toBe("human");
+  });
+});
+
 describe("settings", () => {
   it("lets only the host change them, and rules only between games", () => {
     const { manager } = setup();
